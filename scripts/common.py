@@ -172,6 +172,23 @@ def count_reads(fq):
     return n // 4
 
 
+def mean_read_len(fq, sample=20000):
+    """Mean read length (bp) over up to `sample` reads of a FASTQ (.gz or plain).
+    Used to compute real-data coverage from the run's ACTUAL read length instead
+    of assuming a fixed 150 bp (real runs range ~44-250 bp)."""
+    import gzip
+    op = gzip.open if str(fq).endswith(".gz") else open
+    tot = n = 0
+    with op(fq, "rt") as f:
+        for i, line in enumerate(f):
+            if i % 4 == 1:                      # sequence line
+                tot += len(line.rstrip("\n"))
+                n += 1
+                if n >= sample:
+                    break
+    return tot / n if n else 0.0
+
+
 def faidx_get(genomes_fa, node, samtools):
     """Return a node's sequence from the prebuilt genomes FASTA (no file write),
     or '' if absent. Used for ground-truth QC (N-content / length)."""
@@ -299,17 +316,73 @@ def subsample(seqtk, r1, r2, cov, genome_size, read_len, seed, o1, o2):
     return o1, o2
 
 
-def mutate_genome(ref_fa, mut_rate, indel_frac, seed, out_fa):
-    """Make a novel descendant genome: per-site SNPs at mut_rate, indels at
-    mut_rate*indel_frac (50/50 ins/del, length 1-9 bp). Writes out_fa, returns seq."""
+def mutate_genome(ref_fa, mut_rate, indel_frac, seed, out_fa, ts_tv=2.0):
+    """Make a novel descendant genome under an HKY85-style substitution model:
+    per-site substitution at mut_rate where the new base is drawn ~ pi_j * (kappa if
+    the change is a transition else 1). pi is the source genome's empirical base
+    composition (so GC-skewed genomes get realistic targets) and kappa is set so the
+    expected transition/transversion COUNT ratio equals ts_tv (typ. ~2; ts_tv=None or
+    <=0 -> Jukes-Cantor uniform). Indels at mut_rate*indel_frac (50/50 ins/del, 1-9 bp).
+    Writes out_fa, returns seq."""
     import random
+    from collections import Counter
     rng = random.Random(seed)
-    src = read_fasta(ref_fa)
+    src = read_fasta(ref_fa).upper()
+    PUR, PYR = set("AG"), set("CT")
+    is_ts = lambda i, j: (i in PUR) == (j in PUR)     # both purine or both pyrimidine
+    cnt = Counter(b for b in src if b in "ACGT")
+    tot = sum(cnt.values()) or 1
+    pi = {b: cnt.get(b, 0) / tot for b in "ACGT"}
+    if ts_tv and ts_tv > 0:
+        # Calibrate kappa (transition rate multiplier) so the expected ts:tv COUNT
+        # ratio == ts_tv, accounting for the per-source-base normalization Z_i (which
+        # a closed form ignores). ratio(kappa) is monotone; solve by log-bisection.
+        def ratio(kappa):
+            num = den = 0.0
+            for i in "ACGT":
+                Z = sum(pi[j] * (kappa if is_ts(i, j) else 1.0) for j in "ACGT" if j != i)
+                if Z <= 0:
+                    continue
+                for j in "ACGT":
+                    if j == i:
+                        continue
+                    w = pi[i] * pi[j] * (kappa if is_ts(i, j) else 1.0) / Z
+                    if is_ts(i, j):
+                        num += w
+                    else:
+                        den += w
+            return num / den if den > 0 else float("inf")
+        lo, hi = 1e-6, 1e6
+        for _ in range(60):
+            mid = (lo * hi) ** 0.5
+            if ratio(mid) < ts_tv:
+                lo = mid
+            else:
+                hi = mid
+        kappa = (lo * hi) ** 0.5
+    else:
+        kappa = 1.0
+    # per-source-base weighted alternative bases (HKY: pi_j * kappa^[transition])
+    alts = {i: [(j, pi[j] * (kappa if is_ts(i, j) else 1.0)) for j in "ACGT" if j != i]
+            for i in "ACGT"}
+
+    def pick_alt(i):
+        ws = alts.get(i)
+        if not ws or sum(w for _, w in ws) <= 0:      # non-ACGT / degenerate -> uniform
+            return rng.choice([c for c in "ACGT" if c != i])
+        r = rng.random() * sum(w for _, w in ws)
+        acc = 0.0
+        for j, w in ws:
+            acc += w
+            if r <= acc:
+                return j
+        return ws[-1][0]
+
     out = []
     for b in src:
         x = rng.random()
         if x < mut_rate:
-            out.append(rng.choice([c for c in "ACGT" if c != b.upper()]))
+            out.append(pick_alt(b))
         elif x < mut_rate + mut_rate * indel_frac:
             if rng.random() < 0.5:                       # insertion
                 out.append(b)
@@ -507,7 +580,15 @@ def place(panmap, panman, r1, r2, index, prefix, threads, exclude_self=None,
                 c = line.rstrip("\n").split("\t")
                 if len(c) > mi:
                     rows.append((c[0], float(c[mi])))
-    rows = [r for r in rows if r[0] != exclude_self]
+    # exclude_self may be a single node id or a collection (its whole duplicate
+    # group) so byte-identical twins are also dropped from the candidate set.
+    if exclude_self is None:
+        excl = set()
+    elif isinstance(exclude_self, str):
+        excl = {exclude_self}
+    else:
+        excl = set(exclude_self)
+    rows = [r for r in rows if r[0] not in excl]
     best = max(rows, key=lambda r: r[1])[0] if rows else None
     return best, wall, rss
 

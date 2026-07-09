@@ -152,18 +152,24 @@ for j, sp in enumerate(order):
     ax.grid(axis="y", alpha=0.25)
     if j == 0:
         ax.set_ylabel("Placement score\n(parsimony, clamped ≥ 0)")
-    # ── row 1: zoom — coverage columns only, y autoscaled to the placement range ──
+    # ── row 1: zoom — coverage columns only, symlog y so the low-score placements
+    #    squashed in row 0 spread out while score 0 (correct) stays visible in the
+    #    linear window below linthresh ──
     az = fig.add_subplot(gs[1, 2 * j:2 * j + 2])
     plot_cov(az, sp, groups)
     az.set_xticks(centers); az.set_xticklabels([f"{c}×" for c in covs], fontsize=8)
     az.set_xlim(x_left - 0.2, x_right + 0.2)                # tight to coverage -> wider columns
     pm = [v for (kind, mut) in groups for cov in covs for v in scores[sp][(kind, mut)].get(cov, [])]
     pmax = max(pm) if pm else 1
-    az.set_ylim(-pmax * 0.04 - 0.3, pmax * 1.10 + 0.3)
+    az.set_yscale("symlog", linthresh=1)                   # log tail + linear 0–1 window (0 = correct)
+    ytop = pmax * 1.6 + 1
+    az.set_ylim(-0.6, ytop)
+    ticks = [t for t in (0, 1, 10, 100, 1000, 10000) if t <= ytop]
+    az.set_yticks(ticks); az.set_yticklabels([str(t) for t in ticks])
     az.grid(axis="y", alpha=0.25); az.tick_params(labelsize=8)
     az.set_xlabel("Coverage", fontsize=8)
     if j == 0:
-        az.set_ylabel("Placement score\n(zoom, no random)", fontsize=9)
+        az.set_ylabel("Placement score\n(zoom, symlog, no random)", fontsize=9)
     zoom_links.append((ax, az, x_left, x_right, pmax))
 
 # zoom connectors: dashed region box on the accuracy panel + splayed lines to the zoom

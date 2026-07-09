@@ -64,6 +64,7 @@ FIG3 = f"figure3{TAG}{MM_TAG}"
 
 
 _REAL_SAMPLES = {}
+_DUP_MEMBERS = {}
 def real_samples(sp):
     """[(node, run)] from the species samples TSV, after ground-truth QC on the
     PanMAN-leaf truth genome:
@@ -99,6 +100,26 @@ def real_samples(sp):
             kept.append((node, run))
         _REAL_SAMPLES[sp] = kept
     return _REAL_SAMPLES[sp][:MAX_REAL] if MAX_REAL else _REAL_SAMPLES[sp]
+
+
+def dup_group_members(sp, node):
+    """All node_ids in `node`'s duplicate_group (>=1, incl. node itself). LOO must
+    exclude every byte-identical twin from the candidate set -- not just the
+    held-out node -- otherwise panmap can place on an identical copy (dist ~= 0),
+    inflating placement/assembly accuracy. Falls back to {node} if node is in no
+    group. Cached per species."""
+    if sp not in _DUP_MEMBERS:
+        dgf = os.path.join(os.path.dirname(SP[sp]["samples_tsv"]), "duplicate_groups.tsv")
+        n2m = {}
+        if os.path.exists(dgf):
+            g2n = {}
+            for r in csv.DictReader(open(dgf), delimiter="\t"):
+                g2n.setdefault(r["duplicate_group"], set()).add(r["node_id"])
+            for members in g2n.values():
+                for n in members:
+                    n2m[n] = members
+        _DUP_MEMBERS[sp] = n2m
+    return _DUP_MEMBERS[sp].get(node, {node})
 
 
 def sim_leaf(sp, i):
@@ -190,7 +211,7 @@ rule place_sim:
                             f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".leaf.fa"
         desc = pre + ".desc.fa"
         C.mutate_genome(pre + ".leaf.fa", cfg["mut_rates"][m], config["indel_fraction"],
-                        SEED + i, desc)
+                        SEED + i, desc, ts_tv=config.get("ts_tv", 2.0))
         r1, r2 = C.sim_reads(SP_BIN("wgsim"), desc, cov, cfg["genome_size"], RL,
                              config["seq_error"], SEED + i, pre + "_1.fq", pre + "_2.fq")
         best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, threads,
@@ -220,14 +241,15 @@ rule place_real:
                           f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".truth.fa"
         er1, er2 = C.ontarget_reads(SP_BIN("minimap2"), SP_BIN("samtools"), SP_BIN("seqtk"),
                                     pre + ".truth.fa", rr1, rr2, f"work/{sp}/reads/{run}", threads)
-        avail_cov = 2 * C.count_reads(er1) * RL / cfg["genome_size"]
+        rl_real = C.mean_read_len(er1)   # actual read length; real runs vary ~44-250 bp
+        avail_cov = 2 * C.count_reads(er1) * rl_real / cfg["genome_size"]
         if avail_cov < config.get("gt_min_cov_frac", 0.80) * cov:   # (3) read support -> no-call
             open(output[0], "w").write(f"{sp}\treal\t-1\t{cov}\t\t\t\t\n")
             return
-        r1, r2 = C.subsample(SP_BIN("seqtk"), er1, er2, cov, cfg["genome_size"], RL,
+        r1, r2 = C.subsample(SP_BIN("seqtk"), er1, er2, cov, cfg["genome_size"], rl_real,
                              SEED, pre + "_1.fq", pre + "_2.fq")
         best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, threads,
-                                  exclude_self=node, force_leaf=FORCE_LEAF,
+                                  exclude_self=dup_group_members(sp, node), force_leaf=FORCE_LEAF,
                                   completeness_weight=CW)
         row = _score_row(sp, pan, par, best, node, pre + ".truth.fa", cov, "real",
                          -1, wall, rss, pre, exclude=node)
@@ -303,13 +325,14 @@ rule assemble:
         # depth of that genome, not of the mostly-off-target raw library.
         er1, er2 = C.ontarget_reads(SP_BIN("minimap2"), SP_BIN("samtools"), SP_BIN("seqtk"),
                                     truth, rr1, rr2, f"work/{sp}/reads/{run}", threads)
-        avail_cov = 2 * C.count_reads(er1) * RL / cfg["genome_size"]
+        rl_real = C.mean_read_len(er1)   # actual read length; real runs vary ~44-250 bp
+        avail_cov = 2 * C.count_reads(er1) * rl_real / cfg["genome_size"]
         if avail_cov < config.get("gt_min_cov_frac", 0.80) * cov:   # (3) read support -> no-call
             with open(output[0], "w") as o:
                 for m in ("panmap", "standard", cfg["baseline"], "panmap_" + cfg["baseline"]):
                     o.write(f"{sp}\t{m}\t{cov}" + "\t" * 10 + "\n")
             return
-        r1, r2 = C.subsample(SP_BIN("seqtk"), er1, er2, cov, cfg["genome_size"], RL,
+        r1, r2 = C.subsample(SP_BIN("seqtk"), er1, er2, cov, cfg["genome_size"], rl_real,
                              SEED, pre + "_1.fq", pre + "_2.fq")
         # panmap (leave-one-out): build the index per sample (counted in runtime),
         # place excluding self -> best node -> consensus. best is None when
@@ -320,7 +343,7 @@ rule assemble:
         pmi = pre + ".pmi"
         iw, irss = C.build_index(PANMAP, pan, *cfg["ksl"], pmi, threads)
         best, pw, prss = C.place(PANMAP, pan, r1, r2, pmi, pre + ".pl", threads,
-                                 exclude_self=node, force_leaf=FORCE_LEAF,
+                                 exclude_self=dup_group_members(sp, node), force_leaf=FORCE_LEAF,
                                  completeness_weight=CW)
         # Score a consensus against the truth genome -> both accuracy conventions
         # (base-based headline + legacy event-based) plus raw base/event counts.

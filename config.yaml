@@ -9,8 +9,9 @@ read_length: 150
 exclude_bp: 250                        # bp ignored at each genome flank, parsimony comparison (Fig 2)
 mask_bp: 250                           # bp ignored at each genome flank, genotyping accuracy (Fig 3)
 sim_replicates: 70                     # leaf nodes mutated per species (Fig 2A)
-indel_fraction: 0.1                    # wgsim -R
-seq_error: 0.001                       # wgsim -e
+indel_fraction: 0.1                    # simulated indels, as a fraction of the SNP rate
+seq_error: 0.001                       # wgsim -e (read sequencing error; mutations come from mutate_genome)
+ts_tv: 2.0                             # sim substitution transition/transversion ratio (HKY-style, empirical base freqs); null -> Jukes-Cantor uniform
 n_random: 1                            # random-placement baseline: one random node per placement (Fig 2A)
 # Real ground-truth QC (Fig 3): keep only high-quality PanMAN-leaf truth genomes.
 gt_max_n_frac: 0.01                     # (1) drop truth genomes with > this fraction of Ns
