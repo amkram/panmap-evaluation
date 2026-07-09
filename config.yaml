@@ -1,0 +1,59 @@
+# Panmap evaluation — config for Figures 2 (placement) and 3 (assembly).
+# Paths are wired to the current-format panmans in this tree + pantry data.
+# Panmans must be readable by the current panmap build (--dump-all-scores works).
+panmap: "../build/bin/panmap"
+threads: 8
+seed: 42
+coverages: [0.5, 1, 10, 100]          # estimated depth; manuscript Fig 2/3 x-axis
+read_length: 150
+exclude_bp: 250                        # bp ignored at each genome flank, parsimony comparison (Fig 2)
+mask_bp: 250                           # bp ignored at each genome flank, genotyping accuracy (Fig 3)
+sim_replicates: 70                     # leaf nodes mutated per species (Fig 2A)
+indel_fraction: 0.1                    # wgsim -R
+seq_error: 0.001                       # wgsim -e
+n_random: 1                            # random-placement baseline: one random node per placement (Fig 2A)
+# Real ground-truth QC (Fig 3): keep only high-quality PanMAN-leaf truth genomes.
+gt_max_n_frac: 0.01                     # (1) drop truth genomes with > this fraction of Ns
+gt_min_len_frac: 0.90                   # (1) drop truth genomes shorter than this * genome_size
+gt_min_cov_frac: 0.80                   # (3) read support: sample's enriched reads must reach >= this * target coverage
+# Fig 3 Row 1 standard reference-based pipelines (run exactly as published):
+haphpipe_bin: /home/alex/micromamba/envs/haphpipe/bin   # RSV: HaphPIPE finalize_assembly (LR699737.1)
+ncbi_sars_script: scripts/ncbi_sars_pipeline.py         # SARS: NCBI SC2VC Illumina (NC_045512.2)
+ncbi_sars_ref: work/sars/ncbi_ref/ref.fa
+ncbi_sars_hisat2: work/sars/ncbi_ref/ref
+ncbi_custom_filter: scripts/ncbi_custom_vcf_filter.py
+
+# Real samples + standard references live under this data root (Linux).
+_pantry: &pantry /scratch1/alex/panstop/data
+
+species:
+  rsv:
+    label: "RSV (4K)"
+    panman: "../src/test/data/rsv_4K.panman"           # current-format (ships with repo)
+    genome_size: 15274
+    ksl: [19, 8, 3]
+    mut_rates: [1.0e-4, 1.0e-3]
+    samples_tsv: /scratch1/alex/panstop/data/rsv/samples_filtered.tsv   # cols: run, node, ...
+    baseline: "bwa_ivar"
+    ref_a: /scratch1/alex/panstop/data/rsv/NC_038235.1.fa   # RSV-A standard reference
+    ref_b: /scratch1/alex/panstop/data/rsv/LR699737.1.fa    # RSV-B standard reference
+  sars:
+    label: "SARS-CoV-2 (20K)"
+    panman: "../examples/data/sars_20000_twilight_dipper.panman"  # current-format (ships with repo)
+    genome_size: 29903
+    ksl: [19, 8, 3]
+    mut_rates: [1.0e-4, 1.0e-3]
+    samples_tsv: /scratch1/alex/panstop/data/sars/samples_artic_FINAL.tsv
+    baseline: "bwa_ivar"
+    ref: /scratch1/alex/panstop/data/sars/wuhan1.fa         # Wuhan-Hu-1 (NC_045512.2)
+  tb:
+    label: "M. tb (400)"
+    panman: /scratch1/alex/panstop/data/tb/tb_400.panman
+    genome_size: 4411532
+    ksl: [51, 8, 1]
+    mut_rates: [1.0e-5, 1.0e-4]
+    samples_tsv: /scratch1/alex/panstop/data/tb/samples.tsv
+    baseline: "bwa_ivar"                                          # Clockwork infeasible under amd64 emulation (~21 min/run); BWA+iVar vs H37Rv
+    ref: /scratch1/alex/panstop/data/tb/NC_000962.3.fa      # H37Rv (NC_000962.3); Fig3 Row-1 bcftools consensus target
+    clockwork_ref_dir: /scratch1/alex/panstop/data/tb/clockwork_ref   # prepared Clockwork ref (native-Linux Docker)
+    clockwork_image: "ghcr.io/iqbal-lab-org/clockwork:latest"
