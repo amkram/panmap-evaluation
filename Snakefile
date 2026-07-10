@@ -400,8 +400,8 @@ rule assemble:
                                         mutation_spectrum=MM)
             s_pm = scr(cons)
             # panmap selects the reference (its placed leaf), then genotype that
-            # reference with BWA+iVar+impute: isolates reference selection from
-            # the genotyping method.
+            # reference with BWA+iVar (no impute): isolates reference selection from
+            # the genotyping method. This arm feeds figure_S, not the main Fig 3.
             selref = C.get_seq(PANMANUTILS, PANMAP, pan, best, pre + ".selref.fa",
                                f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".selref.fa"
             cons_pb, pbw, pbrss = C.bwa_ivar(pre + ".selref.fa", r1, r2, pre + ".pbwa",

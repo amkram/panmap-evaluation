@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Figure 3: leave-one-out consensus assembly. Two accuracy rows (paired arms)
-plus a runtime row, one column per species:
-  Row 1 (accuracy): Panmap (full, native genotyping)  vs  single-ref BWA+iVar + impute
-  Row 2 (accuracy): Panmap->BWA+iVar (no impute)       vs  single-ref BWA+iVar (no impute)
-  Row 3 (runtime):  the distinct pipelines
-The single-reference BWA+iVar arms use, per sample, whichever reference the reads
-align best to (for RSV, subtype A NC_038235.1 or B LR699737.1); all samples are
-pooled into one baseline category. Accuracy (the `accuracy` column) = base-based
-% of the held-out genome correctly reconstructed = matches/interior (250 bp flanks
-ignored); the TSV also carries `accuracy_event` (legacy event-based) and raw error
-counts. Usage: plot_fig3.py figure3.tsv out.pdf '<meta>'"""
+"""Figure 3: leave-one-out consensus assembly, one column per species.
+Main figure (out.pdf): Row 1 accuracy (Panmap vs the field-standard pipeline --
+HaphPIPE / NCBI SC2VC / Clockwork, RSV split by subtype A/B), Row 2 runtime, Row 3
+peak memory. Supplementary (figure_S.pdf): the read-pileup arms, Panmap->BWA+iVar vs
+single-ref BWA+iVar (both no impute), each using whichever reference the reads map
+best to (RSV subtype A NC_038235.1 or B LR699737.1), pooled into one baseline.
+Accuracy (the `accuracy` column) = base-based % of the held-out genome reconstructed
+= matches/interior (250 bp flanks ignored); the TSV also carries `accuracy_event`
+(legacy event-based) and raw error counts.
+Usage: plot_fig3.py figure3.tsv out.pdf '<meta>'"""
 import csv
 import json
 import re
@@ -157,8 +156,9 @@ def boxrow(axrow, pairs_of, show_n=True, ylims=None, logy=False):
 
 
 blab = BLAB.get(baseline[order[0]], "BWA+iVar") if order else "BWA+iVar"
-# Row 1: Panmap (full) vs the field-standard reference-based pipeline (HaphPIPE for
-# RSV, NCBI SC2VC for SARS, Clockwork for TB) ;  Row 2: Panmap->ref vs single-ref.
+# Row 1 (accuracy): Panmap (full) vs the field-standard pipeline (HaphPIPE for RSV,
+# NCBI SC2VC for SARS, Clockwork for TB). Rows 2-3 are runtime and peak memory; the
+# Panmap->ref vs single-ref read-pileup comparison is the separate figure_S.
 # RSV row-1 arms cluster at ~98-100% with divergent-A low outliers -> start at 40;
 # SARS row-1 arms both sit at ~99.8-100% -> zoom to 99.0.
 def row0_pairs(sp):
@@ -172,11 +172,11 @@ def row0_pairs(sp):
     return p
 
 
-# Main figure: Row 1 (accuracy vs field-standard pipeline) + runtime row.
+# Main figure: Row 1 accuracy (vs field-standard pipeline) + runtime and memory rows.
 boxrow(axes[0], row0_pairs,
        ylims=YLIMS or {"rsv": (40, 101), "sars": (99.0, 100.1), "tb": (99.0, 100.1)})
 
-# Half-height rows: Panmap vs the single-reference pipeline, per coverage.
+# Half-height rows: Panmap vs the field-standard pipeline, per coverage.
 def linerow(axrow, vals, ylabel, title, xlabel=True, legend=True, ymax=None, logy=False):
     for j, sp in enumerate(order):
         ax = axrow[j]

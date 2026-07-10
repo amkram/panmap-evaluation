@@ -104,20 +104,23 @@ clamped at 0, against a one-draw random-node baseline. Real: leave-one-out place
 of subsampled SRA reads, scored against the held-out leaf's parent. Panels B/C are
 wall time and peak RSS vs coverage.
 
-**Figure 3 (assembly), leave-one-out.** Four arms per sample:
+**Figure 3 (assembly), leave-one-out.** The main figure compares panmap against each
+species' field-standard pipeline:
 
 - **panmap** — place, then genotype a consensus against the placed reference.
-- **standard** — the field-standard pipeline for the species (HaphPIPE for RSV, NCBI
-  SC2VC for SARS, Clockwork for TB), run as published.
-- **BWA+iVar** — one fixed reference (subtype-matched RSV, Wuhan-1 SARS, H37Rv TB) +
-  iVar.
-- **panmap→BWA+iVar** — panmap picks the reference, iVar genotypes it.
+- **standard** — the field-standard pipeline (HaphPIPE for RSV, NCBI SC2VC for SARS,
+  Clockwork for TB), run as published.
 
-The revised figure plots panmap against the standard pipeline on genome fraction,
-per-base error rate, runtime, and memory. The BWA+iVar arms leave iVar's N-gaps
-unfilled, so at low depth they reconstruct little — the coverage-limited baseline
-panmap's pangenome imputation is measured against. Accuracy is over the leaf's
-GenBank genome, 150 bp of each end masked.
+`figure3_revised_rate.pdf` plots these two on genome fraction, per-base error rate,
+runtime, and memory. Accuracy is over the leaf's GenBank genome, 150 bp of each end
+masked.
+
+The assemble step also runs two BWA+iVar arms that feed the **supplementary figure
+(`figure_S`)** and isolate reference choice from genotyping: a single fixed reference
+(subtype-matched RSV, Wuhan-1 SARS, H37Rv TB) + iVar, and panmap→BWA+iVar (panmap
+picks the reference, iVar genotypes it). Both leave iVar's N-gaps unfilled, so at low
+depth they reconstruct little — the coverage-limited baseline for panmap's pangenome
+imputation.
 
 **On-target enrichment.** Raw SRA runs are mostly off-target (RSV can be under 1% of
 a library), so before subsampling, reads are mapped to the sample's own GenBank
@@ -164,5 +167,5 @@ Snakefile          index -> place/assemble -> tables -> plots
 slurm_run.sbatch   builds panmap, then runs on one node
 scripts/           common.py (shared lib), build_panmap.sh, plot_*, rescore_*,
                    classify_*, ncbi_sars_pipeline.py, screen_qc.py, ...
-results/           figure2.pdf, figure3_revised_rate.pdf, *.tsv
+results/           figure2.pdf, figure3_revised_rate.pdf, figure_S.pdf, *.tsv
 ```
