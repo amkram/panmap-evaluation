@@ -26,8 +26,8 @@ def run(cmd, **kw):
     subprocess.run(cmd, stdout=kw.get("stdout", DEV), stderr=DEV, check=False)
 
 
-# All reference indexing is rebuilt per sample and counted in this script's runtime:
-# copy the reference locally, then faidx + GATK dict + HISAT2 index from scratch (1 thread).
+# Reference indexing is rebuilt from scratch per sample (1 thread) so it counts in this
+# script's measured runtime.
 ref = prefix + ".ref.fa"
 shutil.copy(ref0, ref)
 run([SAM, "faidx", ref])

@@ -414,7 +414,7 @@ _CsCounts = namedtuple(
     "_CsCounts", "snps indel_events aligned interior del_bases ins_bases ins_events")
 
 # Per-assembly Fig-3 scores. Two accuracy conventions are reported side by side:
-#   acc_base  = 100 * matches / interior           -- base-based; this is exactly
+#   acc_base  = 100 * matches / interior           -- base-based; this is
 #               the "% of the genome correctly reconstructed" the axis label
 #               claims, so substitutions, deleted bases and uncovered positions
 #               all lower it in proportion to the number of bases affected.
@@ -517,7 +517,7 @@ def assembly_scores(minimap2, consensus_fa, truth_fa, mask_bp):
     """Compare a consensus to the ground-truth genome over the masked interior and
     return both accuracy conventions plus the raw base/event error counts:
       acc_base  = 100 * matches / interior, where matches = aligned - snps -
-                  del_bases. This is the honest "% of the genome correctly
+                  del_bases. This is the "% of the genome correctly
                   reconstructed": substitutions, deleted bases and uncovered
                   positions each lower it by the number of bases they affect.
       acc_event = 100 * cov_frac * (1 - event_err) with event_err counting each
@@ -618,7 +618,7 @@ def assemble(panmap, panman, r1, r2, index, ref_node, prefix, threads,
 # ── BWA-MEM + iVar baseline (Fig 3, RSV & SARS) ───────────────────────────────
 
 def ensure_bwa_index(bwa, ref_fa):
-    """Build the bwa index once, safely under a cross-process lock. A completion
+    """Build the bwa index once under a cross-process lock. A completion
     marker (.bwaok) is written only after `bwa index` finishes, so concurrent jobs
     never race to build the shared reference or read a half-written index."""
     import fcntl
@@ -883,8 +883,8 @@ def bwa_ivar(ref_fa, r1, r2, prefix, threads, minimap2=None, bindir="", impute=F
     iv = subprocess.Popen([b("ivar"), "consensus", "-p", prefix, "-q", "20", "-t", "0.5",
                            "-m", "10"], stdin=mp.stdout, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
-    mp.stdout.close()                # THE FIX: ivar is now the sole reader, so if ivar
-    _wait_or_kill(iv, [mp], 3600)    # exits early mpileup gets EPIPE instead of blocking forever
+    mp.stdout.close()                # ivar is the sole reader now: if it exits early,
+    _wait_or_kill(iv, [mp], 3600)    # mpileup gets EPIPE instead of hanging
     mp.wait()
     wall = time.monotonic() - t0
     _bwaerr.close()

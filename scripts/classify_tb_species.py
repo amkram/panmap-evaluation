@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Coarse MTBC species for each TB panman leaf from genome distance to two anchors:
-  M. canettii        if d(H37Rv) > 10000   (the smooth tubercle bacilli sit ~20-40k
+  M. canettii        if d(H37Rv) > 10000   (smooth tubercle bacilli sit ~20-40k
                                             SNPs out; nothing else exceeds ~5.5k)
-  M. bovis / animal  if d(M. bovis) < 2000 (clean gap: the animal-adapted clade is
+  M. bovis / animal  if d(M. bovis) < 2000 (the animal-adapted clade is
                                             <=~1100 from the bovis ref, the rest >=2600)
   M. tuberculosis    otherwise
 H37Rv is an external reference; the M. bovis anchor (AF2122/97) is a panman leaf.
-This is the robust 3-way split, NOT a fine lineage call (L1-L7 / africanum vs bovis
+A coarse 3-way split, not a fine lineage call (L1-L7 / africanum vs bovis
 need a SNP barcode). Writes: node<TAB>species.
 
 Usage: classify_tb_species.py <genomes.fa> <h37rv.fa> <out.tsv>

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Alternative Fig-3 accuracy panels under three quality conventions, all showing
 Panmap vs the field-standard pipeline (HaphPIPE / NCBI / Clockwork) per species x
-coverage, computed from the cached assemblies (figure3_rescored.tsv). Emits:
+coverage, from the cached assemblies (figure3_rescored.tsv). Emits:
 
   figure3_quast.*    QUAST-style decomposition (3 rows, linear y): genome fraction
                      (%), mismatches per 100 kbp, indel events per 100 kbp.
   figure3_baseerr.*  base error rate = (subs + del_bases + ins_bases) per 100 kbp
-                     over alignment columns -- charges every wrong/missing/spurious
+                     over alignment columns; charges every wrong/missing/spurious
                      base, so large indels and insertions are fully counted (symlog).
   figure3_baseacc.*  original base-based accuracy = matches/interior (%); excludes
-                     insertions and uses truth length as denominator.
+                     insertions, uses truth length as denominator.
 
-RSV's HaphPIPE arm is split into RSV-A / RSV-B (subtype-matched reference), exactly
-as in the main Fig 3; the subtype per sample is recovered from results/figure3.tsv
-by matching each sample's event-based accuracy. Genome fraction + per-100kbp
-mismatch/indel rates are exactly what QUAST reports (dnadiff/MUMmer report the same).
+RSV's HaphPIPE arm is split into RSV-A / RSV-B (subtype-matched reference), as in the
+main Fig 3; the per-sample subtype is recovered from results/figure3.tsv by matching
+each sample's event-based accuracy. Genome fraction and per-100kbp mismatch/indel rates
+match what QUAST reports (dnadiff/MUMmer agree).
 Usage: plot_fig3_quality.py [rescored.tsv]
 """
 import csv

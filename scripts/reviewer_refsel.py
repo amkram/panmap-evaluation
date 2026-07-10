@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Reviewer figure: reference-SELECTION accuracy of panmap vs mash vs minimap2 as
-the number of candidate genomes to choose from grows.
+"""Reference-selection accuracy of panmap vs mash vs minimap2 as the candidate-genome
+pool grows.
 
-For each species we start from the Fig-3 QC-passed real samples (work/<sp>/qc_pass.tsv).
-Leave-one-out: ALL of those test genomes are removed from the candidate pool before
-subsampling, so no method can ever select a test sample's own genome. For each batch
-size x we draw the SAME random x-genome subset (seeded) and hand it to every method:
-  - mash, minimap2 : the x leaf genomes as FASTA (they can only pick a leaf)
-  - panmap         : a --subnet PanMAN of exactly those x leaves, which also exposes
-                     their induced internal/ancestral nodes (panmap may pick those)
-Each method selects one reference from its candidate set using the sample's reads;
-we then score that selected reference against the sample's truth genome with the
-Fig-3 genotyping-accuracy metric (completeness x correctness, 250 bp flanks masked).
+Samples are the Fig-3 QC-passed real samples (work/<sp>/qc_pass.tsv). Leave-one-out:
+all test genomes are removed from the candidate pool before subsampling, so no method
+can select a test sample's own genome. For each batch size x we draw the same seeded
+x-genome subset and hand it to every method:
+  - mash, minimap2 : the x leaf genomes as FASTA (can only pick a leaf)
+  - panmap         : a --subnet PanMAN of those x leaves, which also exposes their
+                     induced internal/ancestral nodes (panmap may pick those)
+Each method selects one reference from the sample's reads; we score it against the
+sample's truth genome with the Fig-3 genotyping-accuracy metric (completeness x
+correctness, 250 bp flanks masked).
 
 Usage: reviewer_refsel.py <out_tsv> [species_csv] [batches_csv] [depth] [workers]
 """
@@ -64,9 +64,9 @@ def prep_reads(sp, node, run, truth_fa, depth):
 
 
 def build_candidates(sp, pool, x, seed, gen):
-    """Draw x genomes from pool (deterministic) and materialise the shared candidate
-    set: a --subnet panman (+ index) for panmap and a concatenated FASTA + mash
-    sketch for minimap2/mash. Returns dict of paths, or None on failure."""
+    """Draw x genomes from pool (seeded) and build the shared candidate set: a --subnet
+    panman (+ index) for panmap, a concatenated FASTA + mash sketch for minimap2/mash.
+    Returns dict of paths, or None on failure."""
     import random
     rng = random.Random(seed)
     picks = rng.sample(pool, x)

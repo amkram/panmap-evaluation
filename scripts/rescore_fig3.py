@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Re-score the cached Fig-3 consensus assemblies under BOTH accuracy conventions
-without re-running the (expensive) assemble rule. For every held-out sample in
-work/<sp>/fig3/ we align each method's already-written consensus to the truth
-genome and report base-based vs legacy event-based accuracy plus the raw error
-counts. Writes results/figure3_rescored.tsv and prints an event-vs-base summary.
+"""Re-score cached Fig-3 consensus assemblies under both accuracy conventions
+without re-running the assemble rule. For every held-out sample in work/<sp>/fig3/,
+align each method's consensus to the truth genome and report base-based vs legacy
+event-based accuracy plus raw error counts. Writes results/figure3_rescored.tsv
+and prints an event-vs-base summary.
 
-The event-vs-base delta is computed on identical consensus files, so it isolates
-the metric choice from any run-to-run assembly variation.
+Scoring identical consensus files isolates the metric choice from run-to-run
+assembly variation.
 
 Usage: python3 scripts/rescore_fig3.py [minimap2] [mask_bp]
 """
@@ -22,11 +22,9 @@ import common as C
 MINIMAP2 = sys.argv[1] if len(sys.argv) > 1 else "minimap2"
 MASK_BP = int(sys.argv[2]) if len(sys.argv) > 2 else 250
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-# RSV A/B subtype per node, from the competitive-mapping classifier (classify_rsv_subtype.py):
-# each sample's truth genome is aligned to a combined A+B reference and assigned the
-# subtype whose reference accrues more matching bases. Emitting it here (joined to each
-# consensus by the node id in its truth.fa header) lets plot_fig3_revised split the
-# HaphPIPE arm into RSV-A/RSV-B by an EXACT node join instead of a fragile accuracy match.
+# RSV A/B subtype per node, from the competitive-mapping classifier (classify_rsv_subtype.py).
+# Joined to each consensus by the node id in its truth.fa header, this lets plot_fig3_revised
+# split the HaphPIPE arm into RSV-A/RSV-B by an exact node join rather than an accuracy match.
 SUBMAP_PATH = sys.argv[3] if len(sys.argv) > 3 else os.path.join(ROOT, "meta", "rsv_subtype.tsv")
 
 
@@ -97,7 +95,7 @@ def main():
             o.write(f"{sp}\t{mth}\t{cov}\t" + "\t".join(str(x) for x in s) + f"\t{sub}\n")
     print(f"wrote {out}", file=sys.stderr)
 
-    # ── summary: per species x method x coverage, event vs base ───────────────
+    # summary: per species x method x coverage, event vs base
     agg = {}
     for sp, mth, cov, sub, s in rows:
         agg.setdefault((sp, mth, cov), []).append(s)

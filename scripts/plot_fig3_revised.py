@@ -12,9 +12,8 @@ the two axes QUAST/dnadiff always report separately:
 Rows 1-2 are computed from the cached assemblies (figure3_rescored.tsv, base-based
 metric); rows 3-4 reuse the published runtime/memory (figure3.tsv). RSV's HaphPIPE
 arm is split into RSV-A / RSV-B (subtype-matched reference), as in the original
-Fig 3; the subtype per sample is the `subtype` column of figure3_rescored.tsv --
-the competitive-mapping classification (classify_rsv_subtype.py) joined by node id,
-an exact assignment rather than an accuracy-match heuristic.
+Fig 3; the per-sample subtype is the `subtype` column of figure3_rescored.tsv,
+the competitive-mapping classification (classify_rsv_subtype.py) joined by node id.
 Usage: plot_fig3_revised.py [rescored.tsv] [figure3.tsv] [out.pdf]
 """
 import csv
@@ -60,9 +59,8 @@ def arms_for(sp):
 
 
 # ── rows 1-2: per-sample base counts from rescored table ──────────────────────
-# RSV's HaphPIPE (standard) arm is split into RSV-A / RSV-B by the per-sample `subtype`
-# column of figure3_rescored.tsv (competitive-mapping classification joined by node id),
-# an exact assignment rather than matching accuracy values across tables.
+# RSV's HaphPIPE (standard) arm is split into RSV-A / RSV-B by the per-sample
+# `subtype` column (competitive-mapping classification, joined by node id).
 data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))    # [sp][arm][cov] -> [count dicts]
 for r in csv.DictReader(open(RES), delimiter="\t"):
     m = r["method"]

@@ -20,8 +20,8 @@ order, labels, muts, covs = meta["order"], meta["labels"], meta["muts"], meta["c
 SIM_C = ["#9ECAE1", "#08519C"]          # two mutation rates (light->dark blue)
 REAL_C = "#E6550D"                       # real (orange)
 RAND_C = "#BBBBBB"                       # random (grey)
-# random-placement points classified by the drawn node's taxon; muted colors +
-# distinct marker shapes. (label, color, marker), most-divergent last (drawn on top).
+# Random-placement points, styled by the drawn node's taxon. Each tuple is
+# (class, label, color, marker); most-divergent class last so it draws on top.
 RAND_STYLES = {
     # RSV random bimodality is same-vs-cross subtype (within-B tight/low, cross A-B far/high)
     "rsv": [("same", "same subtype", "#B0B0B0", "o"), ("cross", "cross subtype", "#4D4D4D", "x")],
@@ -47,8 +47,8 @@ for r in rows:
     if r["wall_s"]:
         perf[sp][cov][0].append(float(r["wall_s"]))
         perf[sp][cov][1].append(float(r["rss_mb"]))
-# random baseline from the tsv random column. Each token is "dist:taxon" (one draw
-# per placement); the ":taxon" is optional so the plain-number format still parses.
+# Random baseline from the tsv 'random' column. Each token is "dist:taxon", one
+# draw per placement; ":taxon" is optional so a plain number still parses.
 for r in rows:
     if not r["random"]:
         continue
@@ -152,9 +152,9 @@ for j, sp in enumerate(order):
     ax.grid(axis="y", alpha=0.25)
     if j == 0:
         ax.set_ylabel("Placement score\n(parsimony, clamped ≥ 0)")
-    # ── row 1: zoom — coverage columns only, symlog y so the low-score placements
-    #    squashed in row 0 spread out while score 0 (correct) stays visible in the
-    #    linear window below linthresh ──
+    # ── row 1: zoom. Coverage columns only, symlog y. Low-score placements squashed
+    #    in row 0 spread out; score 0 (correct) stays visible in the linear window
+    #    below linthresh ──
     az = fig.add_subplot(gs[1, 2 * j:2 * j + 2])
     plot_cov(az, sp, groups)
     az.set_xticks(centers); az.set_xticklabels([f"{c}×" for c in covs], fontsize=8)
@@ -181,7 +181,6 @@ for ax, az, x_left, x_right, pmax in zoom_links:
         fig.add_artist(ConnectionPatch(xyA=(xa, 0), coordsA=ax.transData,
                                        xyB=(xz, zy1), coordsB=az.transData,
                                        color="0.45", lw=0.8, zorder=6))
-# legend
 handles = [plt.Line2D([], [], marker="o", ls="", color=SIM_C[0], label=f"Sim μ={muts[order[0]][0]:g}"),
            plt.Line2D([], [], marker="o", ls="", color=SIM_C[1], label=f"Sim μ={muts[order[0]][1]:g}"),
            plt.Line2D([], [], marker="o", ls="", color=REAL_C, label="Real"),
@@ -189,7 +188,7 @@ handles = [plt.Line2D([], [], marker="o", ls="", color=SIM_C[0], label=f"Sim μ=
            plt.Line2D([], [], color="black", lw=1.5, label="Median")]
 first_ax.legend(handles=handles, fontsize=7, loc="upper left", framealpha=0.9)
 
-# B runtime, C memory (line plots vs coverage, per species — matches the manuscript)
+# B runtime, C memory: line plots vs coverage, per species (matches the manuscript)
 SP_LINE = ["#377EB8", "#E41A1C", "#4DAF4A"]
 for k, (ax, idx, ylab) in enumerate([(axB, 0, "Runtime (s)"), (axC, 1, "Peak RSS (MB)")]):
     for si, sp in enumerate(order):

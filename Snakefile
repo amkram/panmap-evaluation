@@ -25,22 +25,22 @@ configfile: "config.yaml"
 # it yourself and point `panmap:` at it. See the README.
 PANMAP = config["panmap"]
 PANMANUTILS = os.path.join(os.path.dirname(PANMAP), "panmanUtils")
-# Tool thread count for every benchmarked step (panmap index/place/assemble AND the
-# baselines). Held at 1 so the Fig-3 runtime/memory comparison is thread-fair -- the
-# standard pipelines (HaphPIPE --ncpu 1, NCBI -threads 1, Clockwork --cpus 1, BWA -t 1)
-# are all single-threaded, so panmap is too. Because every tool (incl. the cached
-# ontarget enrichment) is 1-thread, each timed rule reserves exactly `MT` Snakemake
-# core(s): `snakemake --cores N` then runs up to N jobs at once with NO CPU
-# oversubscription -- each concurrent job owns a physical core, so its measured
-# wall-clock is contention-free even at full-node parallelism (see slurm_run.sbatch).
+# Thread count for every benchmarked step (panmap index/place/assemble and the
+# baselines). Held at 1 for a thread-fair Fig-3 runtime/memory comparison: the
+# standard pipelines are all single-threaded (HaphPIPE --ncpu 1, NCBI -threads 1,
+# Clockwork --cpus 1, BWA -t 1), so panmap is too. With every tool at 1 thread,
+# each timed rule reserves exactly `MT` Snakemake core(s), so `snakemake --cores N`
+# runs up to N jobs at once with no CPU oversubscription: each job owns a physical
+# core and its wall-clock is contention-free even at full-node parallelism (see
+# slurm_run.sbatch).
 MT = int(config.get("method_threads", 1))
 
-# Peak-RSS budget per job (MB). Paired with `--resources mem_mb=<~node RAM>` it caps how
-# many jobs run at once so total residency never exceeds RAM -- nothing swaps, which
-# would corrupt BOTH the wall-clock AND the peak-RSS the figures report. TB's panman
-# index dominates residency (~20 GB); the standard-pipeline JVMs (GATK/Picard, HaphPIPE)
-# want a few GB. On a 1 TB node this still allows ~27 TB jobs, or hundreds of RSV/SARS
-# jobs, concurrently -- memory-bound for TB, core-bound (--cores) for the small genomes.
+# Peak-RSS budget per job (MB). With `--resources mem_mb=<~node RAM>` it caps
+# concurrency so total residency never exceeds RAM; swapping would corrupt both the
+# wall-clock and the peak-RSS the figures report. TB's panman index dominates
+# residency (~20 GB); the standard-pipeline JVMs (GATK/Picard, HaphPIPE) want a few
+# GB. On a 1 TB node this allows ~27 TB jobs, or hundreds of RSV/SARS jobs
+# concurrently: memory-bound for TB, core-bound (--cores) for the small genomes.
 _JOB_MEM = {"index":    {"tb": 34000, "_": 4000},
             "place":    {"tb": 34000, "_": 3000},
             "assemble": {"tb": 34000, "_": 8000}}
@@ -104,7 +104,7 @@ TAG = ("_" + "_".join(_tag)) if _tag else ""       # placement tag (Fig 2 + Fig 
 MM_TAG = "" if MM else "_nomm"                      # genotyping tag (Fig 3 only)
 F2SIM, F2REAL = f"fig2_sim{TAG}", f"fig2_real{TAG}"
 FIG2 = f"figure2{TAG}"
-F3 = f"fig3{TAG}{MM_TAG}"                           # Fig 3 depends on placement AND genotyping
+F3 = f"fig3{TAG}{MM_TAG}"                           # Fig 3 depends on placement and genotyping
 FIG3 = f"figure3{TAG}{MM_TAG}"
 
 
@@ -149,10 +149,10 @@ def real_samples(sp):
 
 def dup_group_members(sp, node):
     """All node_ids in `node`'s duplicate_group (>=1, incl. node itself). LOO must
-    exclude every byte-identical twin from the candidate set -- not just the
-    held-out node -- otherwise panmap can place on an identical copy (dist ~= 0),
-    inflating placement/assembly accuracy. Falls back to {node} if node is in no
-    group. Cached per species."""
+    exclude every byte-identical twin from the candidate set, not just the held-out
+    node, else panmap can place on an identical copy (dist ~= 0) and inflate
+    placement/assembly accuracy. Falls back to {node} if node is in no group.
+    Cached per species."""
     if sp not in _DUP_MEMBERS:
         dgf = os.path.join(os.path.dirname(SP[sp]["samples_tsv"]), "duplicate_groups.tsv")
         n2m = {}
@@ -212,7 +212,7 @@ rule index:
 
 # ── random-node taxon maps (Fig 2A colouring) ─────────────────────────────────
 # _score_row reads these at placement time to label each random draw. place_sim/
-# place_real depend on the species' map so a clean build generates it BEFORE any
+# place_real depend on the species' map so a clean build generates it before any
 # placement; ancient() keeps that dependency from retriggering cached placements.
 _CLASS_MAP = {"rsv": "meta/rsv_subtype.tsv", "tb": "meta/tb_species.tsv"}
 
@@ -405,7 +405,7 @@ rule assemble:
                                         mutation_spectrum=MM)
             s_pm = scr(cons)
             # panmap selects the reference (its placed leaf), then genotype that
-            # reference with BWA+iVar+impute -- isolates reference selection from
+            # reference with BWA+iVar+impute: isolates reference selection from
             # the genotyping method.
             selref = C.get_seq(PANMANUTILS, PANMAP, pan, best, pre + ".selref.fa",
                                f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".selref.fa"
@@ -468,15 +468,15 @@ rule plot_fig3:
 
 
 # Re-score the cached Fig-3 consensus assemblies under the base-based counts
-# (common.assembly_scores; minimap2 asm20 cs). Cheap -- re-aligns already-written
-# consensuses, no re-assembly -- so it also propagates the common._cs_counts
+# (common.assembly_scores; minimap2 asm20 cs). Cheap: re-aligns already-written
+# consensuses, no re-assembly, so it also propagates the common._cs_counts
 # union-of-covered-intervals fix (overlapping alignment blocks no longer double-
 # count, so genome fraction can never exceed 100%). Depends on the assemble outputs
 # so it runs only once every held-out consensus exists.
 rule rescore_fig3:
     # submap: RSV A/B competitive-mapping classification, so rescore_fig3 can tag each
     # RSV consensus with its subtype (joined by the truth.fa node id) for the revised
-    # figure's HaphPIPE A/B split -- built first when RSV is in scope.
+    # figure's HaphPIPE A/B split. Built first when RSV is in scope.
     input: res=fig3_inputs(),
            submap=(["meta/rsv_subtype.tsv"] if "rsv" in SPECIES else [])
     output: "results/figure3_rescored.tsv"
@@ -489,11 +489,11 @@ rule rescore_fig3:
 
 
 # Revised Fig 3 (final): the single blended accuracy row is split into the two axes
-# QUAST/dnadiff report separately -- genome fraction (completeness) and base error
-# rate (per-base correctness incl. indel bases) -- over the panmap vs field-standard
-# arms, plus runtime/memory. Reads the rescored base counts for rows 1-2 and the
-# published table for runtime/memory (rows 3-4). ROW2METRIC=rate selects the base
-# error rate for row 2 (vs the script default of consensus identity).
+# QUAST/dnadiff report separately, genome fraction (completeness) and base error rate
+# (per-base correctness incl. indel bases), over the panmap vs field-standard arms,
+# plus runtime/memory. Reads the rescored base counts for rows 1-2 and the published
+# table for runtime/memory (rows 3-4). ROW2METRIC=rate selects the base error rate for
+# row 2 (vs the script default of consensus identity).
 rule plot_fig3_revised:
     input: res="results/figure3_rescored.tsv", pub=f"results/{FIG3}.tsv"
     output: f"results/{FIG3}_revised_rate.pdf", f"results/{FIG3}_revised_rate.png"
@@ -536,10 +536,10 @@ def _score_row(sp, pan, par, placed, expected_leaf, sample_fa, cov, kind, m,
     # draw is emitted as "dist:taxon" so Fig 2A can colour it (RSV subtype / MTBC
     # species, from meta/); taxon is empty for species without a class map (SARS).
     import random, hashlib
-    # LOO exclusion for the random pool must drop every EXACT duplicate (byte-identical
-    # twin) of the held-out node and of the true parent -- not just the single labels --
-    # so a random draw can't land on an identical copy (dist ~= 0) and deflate the
-    # random baseline. Mirrors the dup-group exclusion used for panmap's candidate set.
+    # LOO exclusion for the random pool must drop every exact duplicate (byte-identical
+    # twin) of the held-out node and of the true parent, not just the single labels, so
+    # a random draw can't land on an identical copy (dist ~= 0) and deflate the random
+    # baseline. Mirrors the dup-group exclusion used for panmap's candidate set.
     excl_rand = set()
     if exclude is not None:
         excl_rand |= set(dup_group_members(sp, exclude))

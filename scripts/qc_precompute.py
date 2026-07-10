@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ground-truth QC precompute for the real-data assembly benchmark, applying the
-published sample-selection criteria and writing work/<sp>/qc_pass.tsv (the runs
-kept for Fig 3 real data). Criteria, per candidate sample:
+"""Ground-truth QC precompute for the real-data assembly benchmark.
+Applies the published sample-selection criteria; writes work/<sp>/qc_pass.tsv,
+the runs kept for Fig 3 real data. Criteria, per candidate sample:
   (1) Assembly completeness/ambiguity:
         viral (RSV, SARS): truth genome has <= 5 N characters
         M. tuberculosis  : complete assembly (>= 0.98*genome_size, 0 N) + paired Illumina

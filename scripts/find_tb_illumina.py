@@ -22,7 +22,7 @@ for i in range(0, len(accs), 20):
     batch = accs[i:i+20]
     txt = get(EUTILS + "?" + urllib.parse.urlencode(
         {"db": "nuccore", "id": ",".join(batch), "rettype": "gb", "retmode": "text", "seq_stop": "1"}))
-    # split records on VERSION lines; map each record's accession.version to its BioSample
+    # split into records at LOCUS lines; map each accession.version (VERSION) to its BioSample
     for rec in re.split(r"\n(?=LOCUS )", txt):
         m = re.search(r"VERSION\s+(\S+)", rec)
         b = re.search(r"BioSample:\s*(SAM[END][A-Z]?\d+)", rec)

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Assign each RSV panman leaf to subtype A or B by COMPETITIVE mapping: align the
+"""Assign each RSV panman leaf to subtype A or B by competitive mapping: align the
 leaf against a combined A+B reference and take the subtype whose reference accrues
-more matching bases. This is robust where the whole-genome A-vs-B distance (~5%) is
+more matching bases. Needed because the whole-genome A-vs-B distance (~5%) is
 comparable to within-subtype diversity, which defeats nearest-single-reference
-classification (the tight within-B / far cross-A-B structure only emerges with the
-competitive assignment). Writes: node<TAB>subtype.
+classification. Writes: node<TAB>subtype.
 
 Usage: classify_rsv_subtype.py <genomes.fa> <refA.fa> <refB.fa> <out.tsv>
 """

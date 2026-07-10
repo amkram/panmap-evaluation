@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Final reviewer-response figure: leave-one-out genotyping, RSV + SARS side by
-side (2 columns), genotyping accuracy on top and assembly runtime underneath.
-Uses the internal+completeness-weight (cw) Fig 3 data. Three genotyping arms:
+"""Reviewer-response figure: leave-one-out genotyping, RSV + SARS side by side
+(2 columns), genotyping accuracy on top and assembly runtime underneath. Uses the
+internal+completeness-weight (cw) Fig 3 data. Three genotyping arms:
   - Panmap            : panmap selects the reference AND genotypes (native)
   - Panmap->BWA+iVar  : panmap selects the reference, BWA+iVar genotypes
   - BWA+iVar          : single standard reference + BWA+iVar
-Accuracy = % of the held-out genome correctly reconstructed (250 bp flanks
-ignored); each arm drawn as median line + IQR band vs coverage.
+Accuracy = % of the held-out genome correctly reconstructed (250 bp flanks ignored);
+each arm is a median line + IQR band vs coverage.
 Usage: plot_reviewer_fig.py <fig3_cw.tsv> <out_prefix> ['<label_json>']
 """
 import csv

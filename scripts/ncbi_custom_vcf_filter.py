@@ -113,14 +113,6 @@ output_description = ('vcf:path', )
 
 
 def run(_input: Dict, _output: Dict, _config: Dict, _rule: Dict) -> int:
-    """
-    :param _input:
-    :param _output:
-    :param _config:
-    :param _rule:
-    :return:
-    """
-
     snps = 0
     filtered = 0
     dropouts = collections.defaultdict(int)

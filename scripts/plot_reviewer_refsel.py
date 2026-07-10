@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Reviewer figure: reference-selection accuracy vs candidate-genome batch size,
-for panmap (pangenome, may pick internal/ancestral nodes) vs mash vs minimap2
-(leaf genomes only). One panel per species; x = number of candidate genomes to
-choose from (log scale); y = Fig-3 genotyping accuracy of the selected reference
-against the sample's truth genome (median across samples, IQR band).
+"""Reference-selection accuracy vs candidate-genome batch size, for panmap (pangenome,
+may pick internal/ancestral nodes) vs mash vs minimap2 (leaf genomes only). One panel
+per species; x = number of candidate genomes (log scale); y = Fig-3 genotyping accuracy
+of the selected reference vs the sample's truth genome (median across samples, IQR band).
 Usage: plot_reviewer_refsel.py <refsel.tsv> <out.pdf> '<labels_json>'"""
 import csv
 import json

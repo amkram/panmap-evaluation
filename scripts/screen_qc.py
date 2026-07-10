@@ -4,7 +4,7 @@ For each candidate leaf node (a GenBank accession) in a random order, until
 `target` samples pass:
   0) resolve the node accession -> SRA run via NCBI (nuccore -> biosample -> sra)
   1) completeness/ambiguity: viral truth <= 5 N; M.tb complete (>=0.98*len, 0 N) + paired
-  2) on-target depth >= 500x  (map reads to the assembly; estimate on-target depth)
+  2) on-target depth >= 500x  (map reads to the assembly, estimate depth)
   3) concordance: <= 5 variants from bcftools call of reads vs the assembly
 Writes out_tsv (node<TAB>run) incrementally; resumable (skips nodes already logged).
 Usage: screen_qc.py <sp> <genomes_fa> <genome_size> <viral 0|1> <nodes_file> <target> <reads_root> <out_tsv> <log_tsv> <edirect_bin> <bindir>
