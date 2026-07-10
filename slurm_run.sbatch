@@ -70,12 +70,23 @@ export TMPDIR="${SLURM_TMPDIR:-${TMPDIR:-/tmp}}"
 
 echo "node=$(hostname)  physical_cores=$CORES_AVAIL  snakemake_jobs=$JOBS  mem_mb=$MEM_MB  TMPDIR=$TMPDIR"
 
-# panmap is auto-built from latest main by the Snakefile (config: panmap_auto_build),
-# which needs a C++ toolchain + git on PATH on top of the eval tools. Check now so a
-# missing compiler fails here, not deep in the first job.
+# --- build panmap from latest main, before (and separate from) the timed run -----
+# Kept out of the Snakemake DAG so no timed job ever waits on a compile. Needs a C++
+# toolchain + git on PATH on top of the eval tools; check now so a missing compiler
+# fails here, not deep in the run. Reads the build settings from config.yaml and hands
+# the fresh binary to snakemake via --config.
 for t in git cmake c++ make; do
-    command -v "$t" >/dev/null || { echo "missing build tool '$t' (needed to auto-build panmap; or set panmap_auto_build: false and point panmap: at a prebuilt binary)"; exit 1; }
+    command -v "$t" >/dev/null || { echo "missing build tool '$t' (needed to build panmap; or prebuild it and set config panmap:)"; exit 1; }
 done
+read -r PM_REPO PM_DIR PM_REF < <(python3 - <<'PY'
+import yaml
+c = yaml.safe_load(open("config.yaml"))
+print(c.get("panmap_repo", ".."), c.get("panmap_build_dir", "../../.panmap-build"), c.get("panmap_ref", "main"))
+PY
+)
+echo "building panmap ($PM_REF) ..."
+PANMAP_BIN="$(scripts/build_panmap.sh "$PM_REPO" "$PM_DIR" "$PM_REF")"
+echo "panmap: $PANMAP_BIN"
 
 # --rerun-incomplete: recover cleanly if a prior allocation was killed mid-job.
 # --keep-going: one failed job (e.g. a Clockwork/Docker TB-standard sample) must not
@@ -84,6 +95,7 @@ snakemake \
     --cores "$JOBS" \
     --resources mem_mb="$MEM_MB" \
     --configfile config.yaml \
+    --config panmap="$PANMAP_BIN" \
     --rerun-incomplete \
     --keep-going \
     --printshellcmds \

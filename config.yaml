@@ -1,15 +1,15 @@
 # Panmap evaluation — config for Figures 2 (placement) and 3 (assembly).
 # Paths are wired to the current-format panmans in this tree + pantry data.
 
-# panmap binary. With panmap_auto_build (default), the eval builds panmap+panmanUtils
-# itself from the latest `panmap_ref` of `panmap_repo`, into `panmap_build_dir` (an
-# isolated worktree that never touches your checkout), and the `panmap:` path below is
-# ignored. Set panmap_auto_build: false to use `panmap:` as-is (build it yourself).
-panmap_auto_build: true
-panmap_repo: ".."                      # a panmap git checkout (the eval lives under it)
-panmap_ref: main                       # branch/tag to build and keep current
+# panmap binary. Built SEPARATELY from the workflow (so the timed run never waits on a
+# compile): slurm_run.sbatch runs scripts/build_panmap.sh before snakemake, or build it
+# yourself. The three settings below are read by build_panmap.sh / the sbatch; `panmap:`
+# is the binary the workflow actually uses, defaulting to where build_panmap.sh writes
+# it (so `build_panmap.sh && snakemake` works locally with no extra flags).
+panmap_repo: ".."                        # a panmap git checkout (the eval lives under it)
+panmap_ref: main                         # branch/tag to build
 panmap_build_dir: "../../.panmap-build"  # build worktree, outside both repos; kept across runs
-panmap: "../build/bin/panmap"          # used only when panmap_auto_build: false
+panmap: "../../.panmap-build/build/bin/panmap"   # binary the workflow uses
 threads: 8                             # Snakemake cores reserved PER JOB (not a tool thread count):
                                        # with `snakemake -j8` this keeps timed jobs running one-at-a-time
                                        # so wall/RSS are measured without cross-job contention.

@@ -9,7 +9,6 @@
 #   snakemake -n                                      # dry run / DAG check
 import csv
 import os
-import subprocess
 import sys
 
 from snakemake.utils import min_version
@@ -20,22 +19,10 @@ import common as C
 
 configfile: "config.yaml"
 
-# panmap binary. By default (panmap_auto_build) build it from the latest
-# `panmap_ref` (main) of the repo at `panmap_repo` into an isolated worktree, so
-# every run uses a fresh, correct panmap and your own checkout/branch is untouched.
-# scripts/build_panmap.sh is idempotent: it only rebuilds when the ref moved. Set
-# panmap_auto_build=false to use the `panmap:` path as-is.
-def _resolve_panmap():
-    if str(config.get("panmap_auto_build", "true")).strip().lower() in ("false", "0", "no", "off"):
-        return config["panmap"]
-    repo = os.path.abspath(config.get("panmap_repo", ".."))
-    out = os.path.abspath(config.get("panmap_build_dir", "../../.panmap-build"))
-    ref = str(config.get("panmap_ref", "main"))
-    script = os.path.join(workflow.basedir, "scripts", "build_panmap.sh")
-    return subprocess.run([script, repo, out, ref], check=True,
-                          stdout=subprocess.PIPE, text=True).stdout.splitlines()[-1]
-
-PANMAP = _resolve_panmap()
+# panmap binary. Built separately (not by this workflow) -- slurm_run.sbatch runs
+# scripts/build_panmap.sh to build it from the latest main before the run, or build
+# it yourself and point `panmap:` at it. See the README.
+PANMAP = config["panmap"]
 PANMANUTILS = os.path.join(os.path.dirname(PANMAP), "panmanUtils")
 # Tool thread count for every benchmarked step (panmap index/place/assemble AND the
 # baselines). Held at 1 so the Fig-3 runtime/memory comparison is thread-fair -- the

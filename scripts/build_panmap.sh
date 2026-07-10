@@ -15,8 +15,8 @@
 set -euo pipefail
 
 REPO=$(cd "${1:?repo path}" && pwd)
-WT=$2
-REF=${3:-main}
+WT=$(realpath -m "${2:?build dir}")     # absolute: `git -C "$REPO"` would otherwise
+REF=${3:-main}                          # resolve a relative worktree path against $REPO
 BIN="$WT/build/bin/panmap"
 
 git -C "$REPO" fetch --quiet origin "$REF" 2>/dev/null \
