@@ -1,7 +1,15 @@
 # Panmap evaluation — config for Figures 2 (placement) and 3 (assembly).
 # Paths are wired to the current-format panmans in this tree + pantry data.
-# Panmans must be readable by the current panmap build (--dump-all-scores works).
-panmap: "../build/bin/panmap"
+
+# panmap binary. With panmap_auto_build (default), the eval builds panmap+panmanUtils
+# itself from the latest `panmap_ref` of `panmap_repo`, into `panmap_build_dir` (an
+# isolated worktree that never touches your checkout), and the `panmap:` path below is
+# ignored. Set panmap_auto_build: false to use `panmap:` as-is (build it yourself).
+panmap_auto_build: true
+panmap_repo: ".."                      # a panmap git checkout (the eval lives under it)
+panmap_ref: main                       # branch/tag to build and keep current
+panmap_build_dir: "../../.panmap-build"  # build worktree, outside both repos; kept across runs
+panmap: "../build/bin/panmap"          # used only when panmap_auto_build: false
 threads: 8                             # Snakemake cores reserved PER JOB (not a tool thread count):
                                        # with `snakemake -j8` this keeps timed jobs running one-at-a-time
                                        # so wall/RSS are measured without cross-job contention.

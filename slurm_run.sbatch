@@ -70,6 +70,13 @@ export TMPDIR="${SLURM_TMPDIR:-${TMPDIR:-/tmp}}"
 
 echo "node=$(hostname)  physical_cores=$CORES_AVAIL  snakemake_jobs=$JOBS  mem_mb=$MEM_MB  TMPDIR=$TMPDIR"
 
+# panmap is auto-built from latest main by the Snakefile (config: panmap_auto_build),
+# which needs a C++ toolchain + git on PATH on top of the eval tools. Check now so a
+# missing compiler fails here, not deep in the first job.
+for t in git cmake c++ make; do
+    command -v "$t" >/dev/null || { echo "missing build tool '$t' (needed to auto-build panmap; or set panmap_auto_build: false and point panmap: at a prebuilt binary)"; exit 1; }
+done
+
 # --rerun-incomplete: recover cleanly if a prior allocation was killed mid-job.
 # --keep-going: one failed job (e.g. a Clockwork/Docker TB-standard sample) must not
 #               abort the other ~2000; inspect gaps afterward.
