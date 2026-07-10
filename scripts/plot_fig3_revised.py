@@ -12,7 +12,9 @@ the two axes QUAST/dnadiff always report separately:
 Rows 1-2 are computed from the cached assemblies (figure3_rescored.tsv, base-based
 metric); rows 3-4 reuse the published runtime/memory (figure3.tsv). RSV's HaphPIPE
 arm is split into RSV-A / RSV-B (subtype-matched reference), as in the original
-Fig 3; the subtype per sample is recovered from figure3.tsv by event-accuracy match.
+Fig 3; the subtype per sample is the `subtype` column of figure3_rescored.tsv --
+the competitive-mapping classification (classify_rsv_subtype.py) joined by node id,
+an exact assignment rather than an accuracy-match heuristic.
 Usage: plot_fig3_revised.py [rescored.tsv] [figure3.tsv] [out.pdf]
 """
 import csv
@@ -57,13 +59,10 @@ def arms_for(sp):
     return [("panmap", PANMAP_C, panmap_lab(sp)), ("standard", STD_C, STDLAB[sp])]
 
 
-# ── RSV subtype pool (from published table) for splitting HaphPIPE A/B ─────────
-sub_pool = defaultdict(list)
-for r in csv.DictReader(open(PUB), delimiter="\t"):
-    if r["species"] == "rsv" and r["method"].startswith("standard_") and r["accuracy"] not in ("", "nan"):
-        sub_pool[float(r["coverage"])].append([float(r["accuracy"]), r["method"].split("_", 1)[1]])
-
 # ── rows 1-2: per-sample base counts from rescored table ──────────────────────
+# RSV's HaphPIPE (standard) arm is split into RSV-A / RSV-B by the per-sample `subtype`
+# column of figure3_rescored.tsv (competitive-mapping classification joined by node id),
+# an exact assignment rather than matching accuracy values across tables.
 data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))    # [sp][arm][cov] -> [count dicts]
 for r in csv.DictReader(open(RES), delimiter="\t"):
     m = r["method"]
@@ -75,9 +74,8 @@ for r in csv.DictReader(open(RES), delimiter="\t"):
         continue
     sp, cov, arm = r["species"], float(r["coverage"]), base_arm
     if sp == "rsv" and base_arm == "standard":
-        ae, cand = float(r["accuracy_event"]), sub_pool[float(r["coverage"])]
-        j = min(range(len(cand)), key=lambda k: abs(cand[k][0] - ae), default=None)
-        arm = "standard_" + (cand.pop(j)[1] if (j is not None and abs(cand[j][0] - ae) < 1e-3) else "A")
+        sub = r.get("subtype", "").strip()
+        arm = "standard_" + (sub if sub in ("A", "B") else "A")   # A fallback if unclassified
     data[sp][arm][cov].append(c)
 
 # ── rows 3-4: runtime / peak memory from published table (standard* -> std) ────

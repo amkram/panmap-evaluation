@@ -22,6 +22,32 @@ import common as C
 MINIMAP2 = sys.argv[1] if len(sys.argv) > 1 else "minimap2"
 MASK_BP = int(sys.argv[2]) if len(sys.argv) > 2 else 250
 ROOT = os.path.join(os.path.dirname(__file__), "..")
+# RSV A/B subtype per node, from the competitive-mapping classifier (classify_rsv_subtype.py):
+# each sample's truth genome is aligned to a combined A+B reference and assigned the
+# subtype whose reference accrues more matching bases. Emitting it here (joined to each
+# consensus by the node id in its truth.fa header) lets plot_fig3_revised split the
+# HaphPIPE arm into RSV-A/RSV-B by an EXACT node join instead of a fragile accuracy match.
+SUBMAP_PATH = sys.argv[3] if len(sys.argv) > 3 else os.path.join(ROOT, "meta", "rsv_subtype.tsv")
+
+
+def load_submap(path):
+    m = {}
+    if os.path.exists(path):
+        for line in open(path).read().splitlines()[1:]:
+            c = line.split("\t")
+            if len(c) >= 2:
+                m[c[0]] = c[1]
+    return m
+
+
+def node_of(truth_fa):
+    """The node id in a *.truth.fa header (samtools faidx writes '>node')."""
+    with open(truth_fa) as f:
+        h = f.readline()
+    return h[1:].split()[0].strip() if h.startswith(">") else ""
+
+
+SUBMAP = load_submap(SUBMAP_PATH)
 
 # method label -> consensus-file suffix, per species (see Snakefile assemble rule).
 STD_SUFFIX = {"rsv": "hp.consensus.fa", "sars": "ncbi.consensus.fa", "tb": "cw.consensus.fa"}
@@ -34,7 +60,7 @@ def methods(sp):
     }
 
 HEADER = ("species\tmethod\tcoverage\taccuracy\taccuracy_event\t"
-          "snps\tindel_events\tdel_bases\tins_bases\taligned\tinterior")
+          "snps\tindel_events\tdel_bases\tins_bases\taligned\tinterior\tsubtype")
 
 
 def jobs():
@@ -53,7 +79,8 @@ def jobs():
 def score(job):
     sp, mth, cov, cons, truth = job
     s = C.assembly_scores(MINIMAP2, cons, truth, MASK_BP)
-    return (sp, mth, cov, s)
+    sub = SUBMAP.get(node_of(truth), "") if sp == "rsv" else ""
+    return (sp, mth, cov, sub, s)
 
 
 def main():
@@ -66,13 +93,13 @@ def main():
     out = os.path.join(ROOT, "results", "figure3_rescored.tsv")
     with open(out, "w") as o:
         o.write(HEADER + "\n")
-        for sp, mth, cov, s in rows:
-            o.write(f"{sp}\t{mth}\t{cov}\t" + "\t".join(str(x) for x in s) + "\n")
+        for sp, mth, cov, sub, s in rows:
+            o.write(f"{sp}\t{mth}\t{cov}\t" + "\t".join(str(x) for x in s) + f"\t{sub}\n")
     print(f"wrote {out}", file=sys.stderr)
 
     # ── summary: per species x method x coverage, event vs base ───────────────
     agg = {}
-    for sp, mth, cov, s in rows:
+    for sp, mth, cov, sub, s in rows:
         agg.setdefault((sp, mth, cov), []).append(s)
     covs = ["0.5", "1", "1.0", "10", "10.0", "100", "100.0"]
     covkey = lambda c: float(c)

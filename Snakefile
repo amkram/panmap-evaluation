@@ -21,6 +21,28 @@ configfile: "config.yaml"
 
 PANMAP = config["panmap"]
 PANMANUTILS = os.path.join(os.path.dirname(PANMAP), "panmanUtils")
+# Tool thread count for every benchmarked step (panmap index/place/assemble AND the
+# baselines). Held at 1 so the Fig-3 runtime/memory comparison is thread-fair -- the
+# standard pipelines (HaphPIPE --ncpu 1, NCBI -threads 1, Clockwork --cpus 1, BWA -t 1)
+# are all single-threaded, so panmap is too. Because every tool (incl. the cached
+# ontarget enrichment) is 1-thread, each timed rule reserves exactly `MT` Snakemake
+# core(s): `snakemake --cores N` then runs up to N jobs at once with NO CPU
+# oversubscription -- each concurrent job owns a physical core, so its measured
+# wall-clock is contention-free even at full-node parallelism (see slurm_run.sbatch).
+MT = int(config.get("method_threads", 1))
+
+# Peak-RSS budget per job (MB). Paired with `--resources mem_mb=<~node RAM>` it caps how
+# many jobs run at once so total residency never exceeds RAM -- nothing swaps, which
+# would corrupt BOTH the wall-clock AND the peak-RSS the figures report. TB's panman
+# index dominates residency (~20 GB); the standard-pipeline JVMs (GATK/Picard, HaphPIPE)
+# want a few GB. On a 1 TB node this still allows ~27 TB jobs, or hundreds of RSV/SARS
+# jobs, concurrently -- memory-bound for TB, core-bound (--cores) for the small genomes.
+_JOB_MEM = {"index":    {"tb": 34000, "_": 4000},
+            "place":    {"tb": 34000, "_": 3000},
+            "assemble": {"tb": 34000, "_": 8000}}
+def job_mem(rule, sp):
+    d = _JOB_MEM[rule]
+    return d.get(sp, d["_"])
 SP = config["species"]
 COV = [str(c) for c in config["coverages"]]
 RL = config["read_length"]
@@ -150,17 +172,18 @@ wildcard_constraints:
 
 
 rule all:
-    input: f"results/{FIG2}.pdf", f"results/{FIG3}.pdf", f"results/{FIG3}_revised.pdf"
+    input: f"results/{FIG2}.pdf", f"results/{FIG3}.pdf", f"results/{FIG3}_revised_rate.pdf"
 
 
 # ── shared index ──────────────────────────────────────────────────────────────
 rule index:
     output: idx="work/{sp}/index.pmi", t="work/{sp}/index.time"
-    threads: config["threads"]
+    threads: MT
+    resources: mem_mb=lambda wc: job_mem("index", wc.sp)
     run:
         k, s, l = SP[wildcards.sp]["ksl"]
         wall, rss = C.build_index(PANMAP, SP[wildcards.sp]["panman"], k, s, l,
-                                  output.idx, threads)
+                                  output.idx, MT)
         open(output.t, "w").write(f"{wall}\t{rss}\n")
 
 
@@ -178,6 +201,7 @@ def class_map(wildcards):
 
 rule rsv_subtype_map:            # competitive A/B mapping to the two reference genomes
     output: "meta/rsv_subtype.tsv"
+    threads: 24                  # classify_rsv_subtype.py fans out over a Pool(24); reserve to match
     run:
         gen = "work/rsv/genomes.fa"
         C.ensure_genomes_fa(PANMANUTILS, SP["rsv"]["panman"], gen, SP_BIN("samtools"))
@@ -187,6 +211,7 @@ rule rsv_subtype_map:            # competitive A/B mapping to the two reference 
 
 rule tb_species_map:             # coarse MTBC species by distance to H37Rv + M. bovis anchors
     output: "meta/tb_species.tsv"
+    threads: 24                  # classify_tb_species.py fans out over a Pool(24); reserve to match
     run:
         gen = "work/tb/genomes.fa"
         C.ensure_genomes_fa(PANMANUTILS, SP["tb"]["panman"], gen, SP_BIN("samtools"))
@@ -200,7 +225,8 @@ rule tb_species_map:             # coarse MTBC species by distance to H37Rv + M.
 rule place_sim:
     input: idx="work/{sp}/index.pmi", maps=class_map
     output: "work/{sp}/" + F2SIM + "/{i}_{m}_{cov}.tsv"
-    threads: config["threads"]
+    threads: MT
+    resources: mem_mb=lambda wc: job_mem("place", wc.sp)
     run:
         sp, i, m, cov = wildcards.sp, int(wildcards.i), int(wildcards.m), float(wildcards.cov)
         cfg, pan = SP[sp], SP[wildcards.sp]["panman"]
@@ -214,7 +240,7 @@ rule place_sim:
                         SEED + i, desc, ts_tv=config.get("ts_tv", 2.0))
         r1, r2 = C.sim_reads(SP_BIN("wgsim"), desc, cov, cfg["genome_size"], RL,
                              config["seq_error"], SEED + i, pre + "_1.fq", pre + "_2.fq")
-        best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, threads,
+        best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, MT,
                                   force_leaf=FORCE_LEAF, completeness_weight=CW)
         row = _score_row(sp, pan, par, best, leaf, desc, cov, "sim", m, wall, rss, pre)
         open(output[0], "w").write(row)
@@ -223,7 +249,8 @@ rule place_sim:
 rule place_real:
     input: idx="work/{sp}/index.pmi", maps=class_map
     output: "work/{sp}/" + F2REAL + "/{ri}_{cov}.tsv"
-    threads: config["threads"]
+    threads: MT
+    resources: mem_mb=lambda wc: job_mem("place", wc.sp)
     run:
         sp, ri, cov = wildcards.sp, int(wildcards.ri), float(wildcards.cov)
         cfg, pan = SP[sp], SP[wildcards.sp]["panman"]
@@ -240,7 +267,7 @@ rule place_real:
         truth = C.get_seq(PANMANUTILS, PANMAP, pan, node, pre + ".truth.fa",
                           f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".truth.fa"
         er1, er2 = C.ontarget_reads(SP_BIN("minimap2"), SP_BIN("samtools"), SP_BIN("seqtk"),
-                                    pre + ".truth.fa", rr1, rr2, f"work/{sp}/reads/{run}", threads)
+                                    pre + ".truth.fa", rr1, rr2, f"work/{sp}/reads/{run}", MT)
         rl_real = C.mean_read_len(er1)   # actual read length; real runs vary ~44-250 bp
         avail_cov = 2 * C.count_reads(er1) * rl_real / cfg["genome_size"]
         if avail_cov < config.get("gt_min_cov_frac", 0.80) * cov:   # (3) read support -> no-call
@@ -248,7 +275,7 @@ rule place_real:
             return
         r1, r2 = C.subsample(SP_BIN("seqtk"), er1, er2, cov, cfg["genome_size"], rl_real,
                              SEED, pre + "_1.fq", pre + "_2.fq")
-        best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, threads,
+        best, wall, rss = C.place(PANMAP, pan, r1, r2, input.idx, pre, MT,
                                   exclude_self=dup_group_members(sp, node), force_leaf=FORCE_LEAF,
                                   completeness_weight=CW)
         row = _score_row(sp, pan, par, best, node, pre + ".truth.fa", cov, "real",
@@ -305,8 +332,8 @@ rule plot_fig2_raw:
 rule assemble:
     input: idx="work/{sp}/index.pmi"
     output: "work/{sp}/" + F3 + "/{ri}_{cov}.tsv"
-    threads: config["threads"]
-    resources: mem_mb=lambda wildcards: 30000 if wildcards.sp == "tb" else 1500   # TB panmap index ~18GB (1 thread)
+    threads: MT
+    resources: mem_mb=lambda wc: job_mem("assemble", wc.sp)   # TB panman index ~20GB; SARS/RSV JVMs a few GB
     run:
         sp, ri, cov = wildcards.sp, int(wildcards.ri), float(wildcards.cov)
         cfg, pan = SP[sp], SP[wildcards.sp]["panman"]
@@ -324,7 +351,7 @@ rule assemble:
         # Enrich for on-target reads (map to the sample's own genome) so `cov` is
         # depth of that genome, not of the mostly-off-target raw library.
         er1, er2 = C.ontarget_reads(SP_BIN("minimap2"), SP_BIN("samtools"), SP_BIN("seqtk"),
-                                    truth, rr1, rr2, f"work/{sp}/reads/{run}", threads)
+                                    truth, rr1, rr2, f"work/{sp}/reads/{run}", MT)
         rl_real = C.mean_read_len(er1)   # actual read length; real runs vary ~44-250 bp
         avail_cov = 2 * C.count_reads(er1) * rl_real / cfg["genome_size"]
         if avail_cov < config.get("gt_min_cov_frac", 0.80) * cov:   # (3) read support -> no-call
@@ -341,8 +368,8 @@ rule assemble:
         # filtered (min-read-support 2) only when estimated coverage > 3x, else all
         # seeds are kept (min-read-support 1) -- matters most at the low coverages here.
         pmi = pre + ".pmi"
-        iw, irss = C.build_index(PANMAP, pan, *cfg["ksl"], pmi, threads)
-        best, pw, prss = C.place(PANMAP, pan, r1, r2, pmi, pre + ".pl", threads,
+        iw, irss = C.build_index(PANMAP, pan, *cfg["ksl"], pmi, MT)
+        best, pw, prss = C.place(PANMAP, pan, r1, r2, pmi, pre + ".pl", MT,
                                  exclude_self=dup_group_members(sp, node), force_leaf=FORCE_LEAF,
                                  completeness_weight=CW)
         # Score a consensus against the truth genome -> both accuracy conventions
@@ -351,7 +378,7 @@ rule assemble:
                                             config["mask_bp"]) if fa else None)
         arss = pbrss = float("nan")
         if best:
-            cons, aw, arss = C.assemble(PANMAP, pan, r1, r2, pmi, best, pre + ".pm", threads,
+            cons, aw, arss = C.assemble(PANMAP, pan, r1, r2, pmi, best, pre + ".pm", MT,
                                         mutation_spectrum=MM)
             s_pm = scr(cons)
             # panmap selects the reference (its placed leaf), then genotype that
@@ -360,7 +387,7 @@ rule assemble:
             selref = C.get_seq(PANMANUTILS, PANMAP, pan, best, pre + ".selref.fa",
                                f"work/{sp}/genomes.fa", SP_BIN("samtools")) and pre + ".selref.fa"
             cons_pb, pbw, pbrss = C.bwa_ivar(pre + ".selref.fa", r1, r2, pre + ".pbwa",
-                                             config["threads"], SP_BIN("minimap2"),
+                                             MT, SP_BIN("minimap2"),
                                              bindir=os.path.dirname(SP_BIN("samtools")))
             s_pb = scr(cons_pb)
         else:
@@ -424,24 +451,33 @@ rule plot_fig3:
 # count, so genome fraction can never exceed 100%). Depends on the assemble outputs
 # so it runs only once every held-out consensus exists.
 rule rescore_fig3:
-    input: fig3_inputs()
+    # submap: RSV A/B competitive-mapping classification, so rescore_fig3 can tag each
+    # RSV consensus with its subtype (joined by the truth.fa node id) for the revised
+    # figure's HaphPIPE A/B split -- built first when RSV is in scope.
+    input: res=fig3_inputs(),
+           submap=(["meta/rsv_subtype.tsv"] if "rsv" in SPECIES else [])
     output: "results/figure3_rescored.tsv"
     run:
-        C.sh(["python3", os.path.join(workflow.basedir, "scripts/rescore_fig3.py"),
-              SP_BIN("minimap2"), str(config["mask_bp"])])
+        cmd = ["python3", os.path.join(workflow.basedir, "scripts/rescore_fig3.py"),
+               SP_BIN("minimap2"), str(config["mask_bp"])]
+        if input.submap:
+            cmd.append(input.submap[0])
+        C.sh(cmd)
 
 
-# Revised Fig 3: the single blended accuracy row is split into the two axes
-# QUAST/dnadiff report separately -- genome fraction (completeness) and consensus
-# identity (per-base correctness incl. indel bases) -- over the panmap vs field-
-# standard arms, plus runtime/memory. Reads the rescored base counts for rows 1-2
-# and the published table for runtime/memory (rows 3-4).
+# Revised Fig 3 (final): the single blended accuracy row is split into the two axes
+# QUAST/dnadiff report separately -- genome fraction (completeness) and base error
+# rate (per-base correctness incl. indel bases) -- over the panmap vs field-standard
+# arms, plus runtime/memory. Reads the rescored base counts for rows 1-2 and the
+# published table for runtime/memory (rows 3-4). ROW2METRIC=rate selects the base
+# error rate for row 2 (vs the script default of consensus identity).
 rule plot_fig3_revised:
     input: res="results/figure3_rescored.tsv", pub=f"results/{FIG3}.tsv"
-    output: f"results/{FIG3}_revised.pdf", f"results/{FIG3}_revised.png"
+    output: f"results/{FIG3}_revised_rate.pdf", f"results/{FIG3}_revised_rate.png"
     run:
         C.sh(["python3", os.path.join(workflow.basedir, "scripts/plot_fig3_revised.py"),
-              input.res, input.pub, output[0]])
+              input.res, input.pub, output[0]],
+             env={**os.environ, "ROW2METRIC": "rate"})
 
 
 # ── helpers used inside run-blocks ────────────────────────────────────────────
@@ -477,7 +513,16 @@ def _score_row(sp, pan, par, placed, expected_leaf, sample_fa, cov, kind, m,
     # draw is emitted as "dist:taxon" so Fig 2A can colour it (RSV subtype / MTBC
     # species, from meta/); taxon is empty for species without a class map (SARS).
     import random, hashlib
-    lv = [n for n in C.leaves(par) if n != exclude and n != expected]
+    # LOO exclusion for the random pool must drop every EXACT duplicate (byte-identical
+    # twin) of the held-out node and of the true parent -- not just the single labels --
+    # so a random draw can't land on an identical copy (dist ~= 0) and deflate the
+    # random baseline. Mirrors the dup-group exclusion used for panmap's candidate set.
+    excl_rand = set()
+    if exclude is not None:
+        excl_rand |= set(dup_group_members(sp, exclude))
+    if expected is not None:
+        excl_rand |= set(dup_group_members(sp, expected))
+    lv = [n for n in C.leaves(par) if n not in excl_rand]
     rng = random.Random(SEED + int(hashlib.md5(pre.encode()).hexdigest()[:8], 16))
     rand = []
     for rn in rng.sample(lv, min(config["n_random"], len(lv))):
@@ -517,7 +562,7 @@ def _baseline(sp, cfg, r1, r2, pre):
         ref, subtype = cfg.get("ref"), None
         if sp == "rsv":                                  # subtype-matched reference
             ref, subtype = _rsv_ref(cfg, r1, r2, pre)
-        fa, w, rss = C.bwa_ivar(ref, r1, r2, pre + ".bwa", config["threads"],
+        fa, w, rss = C.bwa_ivar(ref, r1, r2, pre + ".bwa", MT,
                                 SP_BIN("minimap2"), bindir=bd)
         return fa, w, ref, subtype, rss
     else:                                                # TB: Clockwork (Docker)

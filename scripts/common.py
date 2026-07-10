@@ -572,10 +572,18 @@ def place(panmap, panman, r1, r2, index, prefix, threads, exclude_self=None,
     if Path(scores).exists():
         with open(scores) as f:
             hdr = f.readline().rstrip("\n").split("\t")
-            # panmap places by logContainment (the "[ok] place ... LogC" node) --
-            # use that exact column (added to --dump-all-scores), not logRaw.
-            mi = (hdr.index("logContainment") if "logContainment" in hdr
-                  else hdr.index("containment") if "containment" in hdr else 1)
+            # panmap places by logContainment (the "[ok] place ... LogC" node) -- score
+            # that exact column. Fail loud if it's absent: silently falling back to a
+            # different column (e.g. containment) scores a node panmap did NOT place on,
+            # which quietly inflates placement/assembly error. Needs a panmap build that
+            # emits logContainment in --dump-all-scores (github.com/amkram/panmap PR #80).
+            if "logContainment" not in hdr:
+                raise RuntimeError(
+                    f"{scores}: --dump-all-scores has no 'logContainment' column "
+                    f"(header={hdr}); rebuild panmap with the logContainment column "
+                    "(github.com/amkram/panmap PR #80) so placement is scored by the "
+                    "metric panmap actually uses.")
+            mi = hdr.index("logContainment")
             for line in f:
                 c = line.rstrip("\n").split("\t")
                 if len(c) > mi:
@@ -858,7 +866,7 @@ def bwa_ivar(ref_fa, r1, r2, prefix, threads, minimap2=None, bindir="", impute=F
     sh([b("bwa"), "index", ref_fa])                    # index built per sample, inside timing
     sh([b("samtools"), "faidx", ref_fa])
     _bwaerr = open(prefix + ".bwatime", "w")
-    p = subprocess.Popen(["/usr/bin/time", "-v", b("bwa"), "mem", "-t", "1", ref_fa, r1, r2],
+    p = subprocess.Popen(["/usr/bin/time", "-v", b("bwa"), "mem", "-t", str(threads), ref_fa, r1, r2],
                          stdout=subprocess.PIPE, stderr=_bwaerr)
     with open(bam, "wb") as bf:
         srt = subprocess.Popen([b("samtools"), "sort", "-o", "-", "-"], stdin=p.stdout,

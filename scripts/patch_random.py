@@ -39,6 +39,23 @@ def load_class(sp):
     return m
 
 
+def dup_members(sp):
+    """{node: set(its exact-duplicate group)} from duplicate_groups.tsv (mirrors the
+    Snakefile's dup_group_members) so the random pool excludes every byte-identical
+    twin of the held-out node/parent, not just the single label."""
+    import csv
+    dgf = os.path.join(os.path.dirname(CFG["species"][sp]["samples_tsv"]), "duplicate_groups.tsv")
+    n2m = {}
+    if os.path.exists(dgf):
+        g2n = {}
+        for r in csv.DictReader(open(dgf), delimiter="\t"):
+            g2n.setdefault(r["duplicate_group"], set()).add(r["node_id"])
+        for members in g2n.values():
+            for n in members:
+                n2m[n] = members
+    return n2m
+
+
 def hnode(fa):
     with open(fa) as f:
         return f.readline()[1:].strip()
@@ -75,7 +92,14 @@ def patch(tsvpath):
     expected = self_node if is_sim else _G["par"].get(self_node)
     exclude = None if is_sim else self_node
     ed = C.genome_distance(MM, exp_fa, sample_fa, EX)
-    lv = [n for n in _G["leaves"] if n != exclude and n != expected]
+    # exclude every exact duplicate of the held-out node AND the parent (dup groups),
+    # matching the Snakefile _score_row so this shortcut stays byte-for-byte faithful.
+    excl = set()
+    if exclude is not None:
+        excl |= set(_G["dupmap"].get(exclude, {exclude}))
+    if expected is not None:
+        excl |= set(_G["dupmap"].get(expected, {expected}))
+    lv = [n for n in _G["leaves"] if n not in excl]
     pre = tsvpath[:-4]                       # matches _score_row's `pre` string
     rng = _random.Random(SEED + int(hashlib.md5(pre.encode()).hexdigest()[:8], 16))
     rn = rng.sample(lv, min(CFG["n_random"], len(lv)))[0]
@@ -92,8 +116,8 @@ def patch(tsvpath):
     return ("OK", tsvpath)
 
 
-def init(sp, leaves, par, classmap, genomes_fa):
-    _G.update(sp=sp, leaves=leaves, par=par, classmap=classmap, genomes_fa=genomes_fa)
+def init(sp, leaves, par, classmap, genomes_fa, dupmap):
+    _G.update(sp=sp, leaves=leaves, par=par, classmap=classmap, genomes_fa=genomes_fa, dupmap=dupmap)
 
 
 def main():
@@ -102,13 +126,14 @@ def main():
         leaves = sorted(C.leaves(par))
         classmap = load_class(sp)
         genomes_fa = f"work/{sp}/genomes.fa"
+        dupmap = dup_members(sp)
         tsvs = []
         for kind, sub, pat in [("sim", "fig2_sim", re.compile(r"^\d+_\d+_[\d.]+\.tsv$")),
                                ("real", "fig2_real", re.compile(r"^\d+_[\d.]+\.tsv$"))]:
             tsvs += [t for t in sorted(glob.glob(f"work/{sp}/{sub}/*.tsv"))
                      if pat.match(os.path.basename(t))]
         miss = 0
-        with Pool(24, initializer=init, initargs=(sp, leaves, par, classmap, genomes_fa)) as p:
+        with Pool(24, initializer=init, initargs=(sp, leaves, par, classmap, genomes_fa, dupmap)) as p:
             for r in p.map(patch, tsvs):
                 if r and r[0] == "MISS":
                     miss += 1

@@ -15,7 +15,9 @@ Output: results/random_classed.tsv  (sp  kind  cov  dist  cls)
 import os
 import re
 import sys
+import csv
 import glob
+import yaml
 import hashlib
 import random as _random
 from multiprocessing import Pool
@@ -24,9 +26,26 @@ sys.path.insert(0, "scripts")
 import common as C
 
 MM, SAM, EX = "minimap2", "samtools", 250
+CFG = yaml.safe_load(open("config.yaml"))
 PANMAN = {"rsv": "../src/test/data/rsv_4K.panman",
           "sars": "../examples/data/sars_20000_twilight_dipper.panman",
           "tb": "/scratch1/alex/panstop/data/tb/tb_400.panman"}
+
+
+def dup_members(sp):
+    """{node: set(its exact-duplicate group)} from duplicate_groups.tsv, so the random
+    pool drops every byte-identical twin of the held-out node/parent (matches the
+    Snakefile dup_group_members / _score_row LOO exclusion)."""
+    dgf = os.path.join(os.path.dirname(CFG["species"][sp]["samples_tsv"]), "duplicate_groups.tsv")
+    n2m = {}
+    if os.path.exists(dgf):
+        g2n = {}
+        for r in csv.DictReader(open(dgf), delimiter="\t"):
+            g2n.setdefault(r["duplicate_group"], set()).add(r["node_id"])
+        for members in g2n.values():
+            for n in members:
+                n2m[n] = members
+    return n2m
 TMP = "/tmp/claude-1015/-scratch1-alex-poopdoop/e32e7b24-91a2-49f4-a2e6-8a1f8e802306/scratchpad/randgen"
 os.makedirs(TMP, exist_ok=True)
 
@@ -67,7 +86,10 @@ def one(task):
     self_node = header_node(sf)
     expected = self_node if is_sim else _G["par"].get(self_node)
     ed = C.genome_distance(MM, exp_fa, sample_fa, EX)
-    lv = [n for n in _G["leaves"] if n != self_node and n != expected]
+    excl = set(_G["dupmap"].get(self_node, {self_node}))     # held-out/leaf + its exact duplicates
+    if expected is not None:
+        excl |= set(_G["dupmap"].get(expected, {expected}))  # parent + its exact duplicates
+    lv = [n for n in _G["leaves"] if n not in excl]
     key = f"{_G['sp']}/{kind}/{os.path.basename(stem)}/{cov}"
     rng = _random.Random(int(hashlib.md5(key.encode()).hexdigest()[:12], 16))
     rn = rng.choice(lv)
@@ -76,8 +98,8 @@ def one(task):
     return (_G["sp"], kind, cov, d, cls)
 
 
-def init(sp, leaves, par, classmap, genomes_fa):
-    _G.update(sp=sp, leaves=leaves, par=par, classmap=classmap, genomes_fa=genomes_fa)
+def init(sp, leaves, par, classmap, genomes_fa, dupmap):
+    _G.update(sp=sp, leaves=leaves, par=par, classmap=classmap, genomes_fa=genomes_fa, dupmap=dupmap)
 
 
 def main():
@@ -88,6 +110,7 @@ def main():
         leaves = sorted(C.leaves(par))
         classmap = load_class(sp)
         genomes_fa = f"work/{sp}/genomes.fa"
+        dupmap = dup_members(sp)
         # placements: every final per-sample tsv; map to its 0.5x intermediates
         tasks = []
         for kind, sub in [("sim", "fig2_sim"), ("real", "fig2_real")]:
@@ -104,7 +127,7 @@ def main():
                     ri, cov = m.groups()
                     int_stem = f"work/{sp}/{sub}/{ri}_0.5"
                 tasks.append((kind, int_stem, cov))
-        with Pool(24, initializer=init, initargs=(sp, leaves, par, classmap, genomes_fa)) as p:
+        with Pool(24, initializer=init, initargs=(sp, leaves, par, classmap, genomes_fa, dupmap)) as p:
             for r in p.map(one, tasks):
                 if r:
                     out.write("\t".join(str(x) for x in r) + "\n")

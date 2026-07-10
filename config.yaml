@@ -2,7 +2,12 @@
 # Paths are wired to the current-format panmans in this tree + pantry data.
 # Panmans must be readable by the current panmap build (--dump-all-scores works).
 panmap: "../build/bin/panmap"
-threads: 8
+threads: 8                             # Snakemake cores reserved PER JOB (not a tool thread count):
+                                       # with `snakemake -j8` this keeps timed jobs running one-at-a-time
+                                       # so wall/RSS are measured without cross-job contention.
+method_threads: 1                      # threads passed to EVERY benchmarked tool (panmap + all baselines).
+                                       # Kept at 1 so the runtime/memory comparison is thread-fair: the
+                                       # standard pipelines are already pinned to 1 CPU, so panmap is too.
 seed: 42
 coverages: [0.5, 1, 10, 100]          # estimated depth; manuscript Fig 2/3 x-axis
 read_length: 150
