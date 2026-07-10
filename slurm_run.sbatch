@@ -49,6 +49,15 @@ set -euo pipefail
 mkdir -p logs
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 
+# Test mode (`--test`, must come first): fast smoke run over 20% of RSV+SARS that still
+# builds panmap, runs every rule, and renders all three plots. Everything else follows.
+TEST_CFG=""
+if [[ "${1:-}" == "--test" ]]; then
+    shift
+    TEST_CFG="test_mode=true"
+    echo "TEST MODE: 20% subset of RSV+SARS, all plots"
+fi
+
 # --- environment: must expose snakemake>=8 AND every eval tool on PATH ----------
 # (minimap2, samtools, bwa, ivar, seqtk, wgsim, bcftools, bedtools, panmanUtils,
 #  plus python w/ numpy/matplotlib/dendropy/pyyaml). Adjust to your site.
@@ -95,7 +104,7 @@ snakemake \
     --cores "$JOBS" \
     --resources mem_mb="$MEM_MB" \
     --configfile config.yaml \
-    --config panmap="$PANMAP_BIN" \
+    --config panmap="$PANMAP_BIN" $TEST_CFG \
     --rerun-incomplete \
     --keep-going \
     --printshellcmds \

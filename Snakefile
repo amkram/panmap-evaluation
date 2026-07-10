@@ -8,6 +8,7 @@
 #   snakemake -j8 results/figure2.pdf                 # Fig 2 only
 #   snakemake -n                                      # dry run / DAG check
 import csv
+import math
 import os
 import sys
 
@@ -54,11 +55,30 @@ SEED = config["seed"]
 #   --config only_species=rsv          restrict to a subset (comma-separated)
 #   --config sim_replicates=6          fewer simulated leaves per species
 #   --config max_real=3                cap real (SRA) samples per species
+#   --config test_mode=true            fast smoke run: 20% of RSV+SARS, all plots
+# Test mode (or subset_frac on its own) takes a fraction of both the simulated leaves
+# and the real samples, per species, so a run exercises every rule + plot at ~1/5 cost.
+TEST = str(config.get("test_mode", "")).strip().lower() in ("true", "1", "yes", "on")
+SUBSET = float(config.get("subset_frac", 0.2 if TEST else 0) or 0)   # 0 = full data
 _only = str(config.get("only_species", "")).strip()
-SPECIES = [s for s in _only.split(",") if s] if _only else list(SP)
+_default_species = [s for s in ("rsv", "sars") if s in SP] if TEST else list(SP)
+SPECIES = [s for s in _only.split(",") if s] if _only else _default_species
 MAX_REAL = int(config.get("max_real", 0))      # 0 = all real samples
 MUT = [0, 1]                                   # two per-species mutation rates
-REPS = range(config["sim_replicates"])
+# sim_leaf still draws from the full replicate list, so the subset is a reproducible
+# prefix of the full run's leaves.
+REPS = range(max(1, math.ceil(SUBSET * config["sim_replicates"])) if SUBSET > 0
+             else config["sim_replicates"])
+
+
+def _cap_real(lst):
+    """Cap the real-sample list: hard MAX_REAL if set, else a SUBSET fraction (ceil,
+    >=1) per species for test/smoke runs, else the whole list."""
+    if MAX_REAL:
+        return lst[:MAX_REAL]
+    if SUBSET > 0:
+        return lst[:max(1, math.ceil(SUBSET * len(lst)))]
+    return lst
 RESULT = "results"
 WORK = "work"
 
@@ -102,7 +122,7 @@ def real_samples(sp):
         if os.path.exists(qcp):                              # curated set from screen_qc / QC
             with open(qcp) as f:
                 _REAL_SAMPLES[sp] = [(r["node"], r["run"]) for r in csv.DictReader(f, delimiter="\t")]
-            return _REAL_SAMPLES[sp][:MAX_REAL] if MAX_REAL else _REAL_SAMPLES[sp]
+            return _cap_real(_REAL_SAMPLES[sp])
         with open(SP[sp]["samples_tsv"]) as f:
             rows = [(r["node"], r["run"]) for r in csv.DictReader(f, delimiter="\t")]
         gen = f"work/{sp}/genomes.fa"
@@ -124,7 +144,7 @@ def real_samples(sp):
                 seen.add(g)
             kept.append((node, run))
         _REAL_SAMPLES[sp] = kept
-    return _REAL_SAMPLES[sp][:MAX_REAL] if MAX_REAL else _REAL_SAMPLES[sp]
+    return _cap_real(_REAL_SAMPLES[sp])
 
 
 def dup_group_members(sp, node):

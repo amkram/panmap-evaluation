@@ -22,6 +22,8 @@ snakemake -j8 --config only_species=rsv sim_replicates=6 max_real=3
 ```
 
 `only_species` (subset), `sim_replicates` (default 70), `max_real` (0 = all).
+`test_mode=true` is a fast smoke run — 20% of RSV+SARS (no TB), every rule, all three
+plots (~370 jobs).
 
 ## Building panmap
 
@@ -112,10 +114,11 @@ memory-bound (~27). Accuracy is deterministic regardless of `-j`.
 the node):
 
 ```bash
-sbatch -p <partition> -A <account> slurm_run.sbatch
+sbatch -p <partition> -A <account> slurm_run.sbatch           # full run
+sbatch -p <partition> -A <account> slurm_run.sbatch --test     # 20% RSV+SARS smoke run
 ```
 
-~2400 jobs; `--rerun-incomplete` resumes a killed allocation. A few things are
+~2400 jobs (`--test` is ~370); `--rerun-incomplete` resumes a killed allocation. A few things are
 host-specific and will no-call (not crash, via `--keep-going`) if missing on the node:
 
 - the `config.yaml` data root must be visible cluster-wide;

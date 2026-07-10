@@ -78,6 +78,10 @@ for r in csv.DictReader(open(RES), delimiter="\t"):
         arm = "standard_" + (sub if sub in ("A", "B") else "A")   # A fallback if unclassified
     data[sp][arm][cov].append(c)
 
+# Only plot species actually present in the data (e.g. test mode = RSV+SARS, no TB),
+# keeping the canonical order; fall back to all three if the table is unexpectedly empty.
+SP = [sp for sp in SP if sp in data] or SP
+
 # ── rows 3-4: runtime / peak memory from published table (standard* -> std) ────
 rt = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 mem = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
