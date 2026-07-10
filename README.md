@@ -55,16 +55,45 @@ micromamba create -n panmap-eval -c conda-forge -c bioconda \
 
 ## Data
 
-Per species, `config.yaml` points at a panman, a samples TSV, and the baseline
-reference FASTA(s). The samples TSV is one row per real sample:
+Everything a run reads lives under `data/<sp>/`. The small authoritative pieces —
+`samples.tsv` (the locked real-sample set) and `duplicate_groups.tsv` — are committed;
+the large panmans, reference FASTAs, and TB's `clockwork_ref/` are git-ignored and
+fetched separately. `samples.tsv` is one row per real sample — `node` is the leaf's
+label in the panman (its GenBank genome is the ground truth), `run` a paired Illumina
+SRA/ENA accession:
 
 ```
 node	run
 USA/.../|OQ782918.1|2023-03-23	SRR24110076
 ```
 
-`node` is the leaf's label in the panman (its GenBank genome is the ground truth);
-`run` is a paired Illumina SRA/ENA accession.
+It's already deduplicated to one sample per byte-identical group and is the single
+source of truth (no separate QC cache).
+
+### Fetch the large inputs
+
+Not in git — on a fresh checkout, pull them from the host that has them, into `data/`
+(run from the repo root):
+
+```bash
+DEV=alex@silverbullet.ucsc.edu
+
+# refs + TB panman/clockwork_ref (~90 MB) from the pantry -> data/<sp>/
+rsync -av --files-from=- "$DEV:/scratch1/alex/panstop/data/" data/ <<'EOF'
+rsv/NC_038235.1.fa
+rsv/LR699737.1.fa
+sars/wuhan1.fa
+tb/tb_400.panman
+tb/NC_000962.3.fa
+tb/clockwork_ref
+EOF
+# the RSV + SARS panmans live in the panmap source tree, not the pantry
+rsync -av "$DEV:/scratch1/alex/poopdoop/src/test/data/rsv_4K.panman" data/rsv/
+rsync -av "$DEV:/scratch1/alex/poopdoop/examples/data/sars_20000_twilight_dipper.panman" data/sars/
+```
+
+Reads aren't transferred — the pipeline pulls them from ENA on demand and caches them
+under `work/<sp>/reads/`.
 
 ## What it measures
 

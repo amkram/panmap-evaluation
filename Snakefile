@@ -118,11 +118,6 @@ def real_samples(sp):
     Read-support (3) is enforced as a runtime no-call in place_real/assemble.
     Cached; capped at MAX_REAL when set (>0) for scoped / smoke runs."""
     if sp not in _REAL_SAMPLES:
-        qcp = f"work/{sp}/qc_pass.tsv"
-        if os.path.exists(qcp):                              # curated set from screen_qc / QC
-            with open(qcp) as f:
-                _REAL_SAMPLES[sp] = [(r["node"], r["run"]) for r in csv.DictReader(f, delimiter="\t")]
-            return _cap_real(_REAL_SAMPLES[sp])
         with open(SP[sp]["samples_tsv"]) as f:
             rows = [(r["node"], r["run"]) for r in csv.DictReader(f, delimiter="\t")]
         gen = f"work/{sp}/genomes.fa"

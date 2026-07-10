@@ -1,11 +1,11 @@
 # Panmap evaluation — config for Figures 2 (placement) and 3 (assembly).
 # Paths are wired to the current-format panmans in this tree + pantry data.
 
-# panmap binary. Built SEPARATELY from the workflow (so the timed run never waits on a
-# compile): slurm_run.sbatch runs scripts/build_panmap.sh before snakemake, or build it
-# yourself. The three settings below are read by build_panmap.sh / the sbatch; `panmap:`
-# is the binary the workflow actually uses, defaulting to where build_panmap.sh writes
-# it (so `build_panmap.sh && snakemake` works locally with no extra flags).
+# panmap binary. Built separately from the workflow so the timed run never waits on a
+# compile: slurm_run.sbatch runs scripts/build_panmap.sh before snakemake, or build it
+# yourself. The three settings below are read by build_panmap.sh / the sbatch. `panmap:`
+# is the binary the workflow uses, defaulting to where build_panmap.sh writes it, so
+# `build_panmap.sh && snakemake` works locally with no extra flags.
 panmap_repo: ".."                        # a panmap git checkout (the eval lives under it)
 panmap_ref: main                         # branch/tag to build
 panmap_build_dir: "../../.panmap-build"  # build worktree, outside both repos; kept across runs
@@ -37,37 +37,39 @@ ncbi_sars_ref: work/sars/ncbi_ref/ref.fa
 ncbi_sars_hisat2: work/sars/ncbi_ref/ref
 ncbi_custom_filter: scripts/ncbi_custom_vcf_filter.py
 
-# Real samples + standard references live under this data root (Linux).
-_pantry: &pantry /scratch1/alex/panstop/data
-
+# All per-species inputs live under data/<sp>/, relative to this repo (self-contained,
+# so the eval ports to another host by copying data/ -- see the README rsync command).
+# The small authoritative bits -- samples.tsv (the locked real set) and
+# duplicate_groups.tsv -- are committed; the large panmans/refs/clockwork_ref are
+# git-ignored and fetched separately.
 species:
   rsv:
     label: "RSV (4K)"
-    panman: "../src/test/data/rsv_4K.panman"           # current-format (ships with repo)
+    panman: data/rsv/rsv_4K.panman
     genome_size: 15274
     ksl: [19, 8, 3]
     mut_rates: [1.0e-4, 1.0e-3]
-    samples_tsv: /scratch1/alex/panstop/data/rsv/samples_filtered.tsv   # cols: run, node, ...
+    samples_tsv: data/rsv/samples.tsv            # locked real set (cols: node, run)
     baseline: "bwa_ivar"
-    ref_a: /scratch1/alex/panstop/data/rsv/NC_038235.1.fa   # RSV-A standard reference
-    ref_b: /scratch1/alex/panstop/data/rsv/LR699737.1.fa    # RSV-B standard reference
+    ref_a: data/rsv/NC_038235.1.fa               # RSV-A standard reference
+    ref_b: data/rsv/LR699737.1.fa                # RSV-B standard reference
   sars:
     label: "SARS-CoV-2 (20K)"
-    panman: "../examples/data/sars_20000_twilight_dipper.panman"  # current-format (ships with repo)
+    panman: data/sars/sars_20000_twilight_dipper.panman
     genome_size: 29903
     ksl: [19, 8, 3]
     mut_rates: [1.0e-4, 1.0e-3]
-    samples_tsv: /scratch1/alex/panstop/data/sars/samples_artic_FINAL.tsv
+    samples_tsv: data/sars/samples.tsv
     baseline: "bwa_ivar"
-    ref: /scratch1/alex/panstop/data/sars/wuhan1.fa         # Wuhan-Hu-1 (NC_045512.2)
+    ref: data/sars/wuhan1.fa                     # Wuhan-Hu-1 (NC_045512.2)
   tb:
     label: "M. tb (400)"
-    panman: /scratch1/alex/panstop/data/tb/tb_400.panman
+    panman: data/tb/tb_400.panman
     genome_size: 4411532
     ksl: [51, 8, 1]
     mut_rates: [1.0e-5, 1.0e-4]
-    samples_tsv: /scratch1/alex/panstop/data/tb/samples.tsv
-    baseline: "bwa_ivar"                                          # Clockwork infeasible under amd64 emulation (~21 min/run); BWA+iVar vs H37Rv
-    ref: /scratch1/alex/panstop/data/tb/NC_000962.3.fa      # H37Rv (NC_000962.3); Fig3 Row-1 bcftools consensus target
-    clockwork_ref_dir: /scratch1/alex/panstop/data/tb/clockwork_ref   # prepared Clockwork ref (native-Linux Docker)
+    samples_tsv: data/tb/samples.tsv
+    baseline: "bwa_ivar"                          # Clockwork infeasible under amd64 emulation; BWA+iVar vs H37Rv
+    ref: data/tb/NC_000962.3.fa                  # H37Rv (NC_000962.3); Fig3 Row-1 bcftools consensus target
+    clockwork_ref_dir: data/tb/clockwork_ref     # prepared Clockwork ref (native-Linux Docker)
     clockwork_image: "ghcr.io/iqbal-lab-org/clockwork:latest"
