@@ -623,3 +623,23 @@ def _rsv_ref(cfg, r1, r2, pre):
 def _clockwork(cfg, r1, r2, pre):
     return C.clockwork_consensus(cfg["clockwork_image"], cfg["clockwork_ref_dir"],
                                  cfg["ref"], r1, r2, pre, bcftools=SP_BIN("bcftools"))
+
+
+# ── Supplementary figure: leaf-only vs internal-allowed placement (consensus) ──
+# force_leaf only affects panmap's placement, so this isolates the panmap arm: for
+# every real leave-one-out sample x coverage, build the consensus under both
+# --force-leaf and internal-allowed placement (shared reads -> each sample paired) and
+# score genome fraction + per-base error. The driver builds its own per-species index
+# and parallelises across samples internally, so it never re-runs the mode-independent
+# standard/baseline arms. Run: snakemake results/figureSX_forceleaf.pdf --cores N
+rule figure_forceleaf:
+    output: pdf="results/figureSX_forceleaf.pdf", png="results/figureSX_forceleaf.png",
+            tsv="results/forceleaf_consensus.tsv"
+    run:
+        jobs = min(getattr(workflow, "cores", 8) or 8, 64)
+        C.sh(["python3", os.path.join(workflow.basedir, "scripts/forceleaf_consensus.py"),
+              PANMAP, output.tsv, ",".join(SPECIES), "0", str(jobs)])
+        meta = {"order": SPECIES, "labels": {sp: SP[sp]["label"] for sp in SPECIES},
+                "cov": config["coverages"]}
+        C.sh(["python3", os.path.join(workflow.basedir, "scripts/plot_forceleaf.py"),
+              output.tsv, output.pdf, json_dumps(meta)])

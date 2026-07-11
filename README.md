@@ -122,6 +122,16 @@ picks the reference, iVar genotypes it). Both leave iVar's N-gaps unfilled, so a
 depth they reconstruct little — the coverage-limited baseline for panmap's pangenome
 imputation.
 
+**Supplementary figure (`figureSX_forceleaf`), placement mode.** `--force-leaf`
+restricts placement to observed leaves; the default also lets internal (ancestral)
+nodes into the candidate set. `snakemake results/figureSX_forceleaf.pdf --cores N`
+rebuilds every real leave-one-out consensus under both modes (same reads, so each
+sample is paired) and plots genome fraction + per-base error per species. Only
+panmap's placement arm depends on the mode, so the driver
+(`scripts/forceleaf_consensus.py`) runs just that arm, not the standard/baseline
+pipelines. Completeness is unchanged (at ceiling); allowing internal nodes lowers
+per-base error (paired sign test, RSV/SARS p < 1e-3; TB same direction, ns).
+
 **On-target enrichment.** Raw SRA runs are mostly off-target (RSV can be under 1% of
 a library), so before subsampling, reads are mapped to the sample's own GenBank
 assembly and only mapped pairs are kept (cached under `work/<sp>/reads/<run>/`).
@@ -167,5 +177,6 @@ Snakefile          index -> place/assemble -> tables -> plots
 slurm_run.sbatch   builds panmap, then runs on one node
 scripts/           common.py (shared lib), build_panmap.sh, plot_*, rescore_*,
                    classify_*, ncbi_sars_pipeline.py, screen_qc.py, ...
-results/           figure2.pdf, figure3_revised_rate.pdf, figure_S.pdf, *.tsv
+results/           figure2.pdf, figure3_revised_rate.pdf, figure_S.pdf,
+                   figureSX_forceleaf.pdf, *.tsv
 ```
